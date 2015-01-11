@@ -297,13 +297,6 @@ canvas_initialize(mrb_state *mrb, mrb_value self) {
   return self;
 }
 
-
-static mrb_value
-canvas_draw(mrb_state *mrb, mrb_value self) {
-  mrb_raise(mrb, E_RUNTIME_ERROR, "override this method");
-  return self;
-}
-
 static mrb_value
 canvas_color(mrb_state *mrb, mrb_value self) {
   CANVAS_DEFAULT_DECLS;
@@ -779,6 +772,23 @@ canvas_snapshot(mrb_state *mrb, mrb_value self) {
 }
 
 static mrb_value
+canvas_width(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  return mrb_fixnum_value(canvas->width);
+}
+
+static mrb_value
+canvas_height(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  return mrb_fixnum_value(canvas->height);
+}
+
+
+static mrb_value
 image_to_png(mrb_state *mrb, mrb_value self) {
   yeah_image_t *image;
   cairo_status_t status;
@@ -837,7 +847,6 @@ mrb_mruby_yeah_canvas_gem_init(mrb_state *mrb) {
   MRB_SET_INSTANCE_TT(cImage, MRB_TT_DATA);
 
   mrb_define_method(mrb, cCanvas, "initialize", canvas_initialize, ARGS_REQ(2));
-  mrb_define_method(mrb, cCanvas, "draw", canvas_draw, ARGS_NONE());
 
   mrb_define_method(mrb, cCanvas, "color", canvas_color, ARGS_REQ(3) | ARGS_OPT(1));
   mrb_define_method(mrb, cCanvas, "image", canvas_image, ARGS_REQ(1));
@@ -861,7 +870,8 @@ mrb_mruby_yeah_canvas_gem_init(mrb_state *mrb) {
   mrb_define_method(mrb, cCanvas, "scale", canvas_scale, ARGS_REQ(2) | ARGS_BLOCK());
   mrb_define_method(mrb, cCanvas, "rotate", canvas_rotate, ARGS_REQ(1) | ARGS_BLOCK());
   mrb_define_method(mrb, cCanvas,  "snapshot", canvas_snapshot, ARGS_NONE());
-
+  mrb_define_method(mrb, cCanvas, "width", canvas_width, ARGS_NONE());
+  mrb_define_method(mrb, cCanvas, "height", canvas_height, ARGS_NONE());
 
   mrb_define_class_method(mrb, cImage, "load", image_load, ARGS_REQ(1));
   mrb_undef_class_method(mrb, cImage, "new");
