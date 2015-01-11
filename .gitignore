@@ -1,0 +1,5 @@
+tmp
+*.mrb
+test/*.jpg
+test/test*.png
+

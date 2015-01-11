@@ -1,0 +1,893 @@
+#include <mruby.h>
+#include <mruby/data.h>
+#include <mruby/class.h>
+#include <mruby/array.h>
+#include <mruby/value.h>
+#include <mruby/variable.h>
+#include <mruby/string.h>
+
+#include "mruby-canvas.h"
+
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
+#include <time.h>
+#include <assert.h>
+#include <jpeglib.h>
+
+#include <cairo.h>
+
+static mrb_sym id_m;
+static mrb_sym id_M;
+static mrb_sym id_Z;
+static mrb_sym id_z;
+static mrb_sym id_Z;
+static mrb_sym id_l;
+static mrb_sym id_L;
+static mrb_sym id_H;
+static mrb_sym id_h;
+static mrb_sym id_V;
+static mrb_sym id_v;
+static mrb_sym id_C;
+static mrb_sym id_c;
+static mrb_sym id_A;
+static mrb_sym id_a;
+static mrb_sym id_instance_eval;
+
+struct RClass *mYeah;
+struct RClass *cCanvas;
+struct RClass *cImage;
+
+#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
+
+static void
+canvas_free(mrb_state *mrb, void *ptr) {
+  yeah_canvas_t *canvas = (yeah_canvas_t *) ptr;
+
+  if(canvas->cr != NULL) {
+    cairo_destroy(canvas->cr);
+  }
+
+  if(canvas->surface != NULL) {
+    cairo_surface_destroy(canvas->surface);
+  }
+
+  if(canvas->free_func != NULL) {
+    (*canvas->free_func)(mrb, ptr);
+  }
+
+  mrb_free(mrb, ptr);
+
+}
+
+static void
+image_free(mrb_state *mrb, void *ptr) {
+  yeah_image_t *image = (yeah_image_t *) ptr;
+  if(image->surface != NULL) {
+    cairo_surface_destroy(image->surface);
+  }
+  if(image->data != NULL) {
+    mrb_free(mrb, image->data);
+  }
+  mrb_free(mrb, ptr);
+}
+
+
+#define CANVAS_DEFAULT_DECLS \
+  yeah_canvas_t *canvas;\
+  cairo_t *cr;\
+  (void) cr;
+
+#define CANVAS_DEFAULT_DECL_INITS \
+  Data_Get_Struct(mrb, self, &_yeah_canvas_type_info, canvas);\
+  cr = canvas->cr;
+
+
+
+struct mrb_data_type _yeah_canvas_type_info = {"Canvas", canvas_free};
+struct mrb_data_type _yeah_image_type_info = {"Image", image_free};
+
+static int raise_cairo_status(mrb_state *mrb, cairo_status_t status) {
+  switch(status) {
+    case CAIRO_STATUS_NO_MEMORY:
+      mrb_raise(mrb, E_RUNTIME_ERROR, "no memory");
+      break;
+    case CAIRO_STATUS_FILE_NOT_FOUND:
+      mrb_raise(mrb, E_RUNTIME_ERROR, "file not found");
+      break;
+    case CAIRO_STATUS_READ_ERROR:
+      mrb_raise(mrb, E_RUNTIME_ERROR, "read error");
+      break;
+    case CAIRO_STATUS_SURFACE_TYPE_MISMATCH:
+      mrb_raise(mrb, E_RUNTIME_ERROR, "surface type mismatch");
+      break;
+    case CAIRO_STATUS_WRITE_ERROR:
+      mrb_raise(mrb, E_RUNTIME_ERROR, "write error");
+      break;
+    default:
+      return FALSE;
+  }
+  return TRUE;
+}
+
+
+static mrb_value
+image_new(mrb_state *mrb, yeah_image_t **rimage) {
+  yeah_image_t *image = (yeah_image_t *) mrb_calloc(mrb, sizeof(yeah_image_t), 1);
+  mrb_value mrb_image = mrb_class_new_instance(mrb, 0, NULL, cImage);
+
+  DATA_PTR(mrb_image) = image;
+  DATA_TYPE(mrb_image) = &_yeah_image_type_info;
+
+  if(*rimage != NULL)  *rimage = image;
+
+  return mrb_image;
+}
+
+
+static cairo_status_t
+read_png_from_buffer (void *closure,
+                      unsigned char *data,
+                      unsigned int length) {
+  struct yeah_img_buf *buf = (struct yeah_img_buf *) closure;
+
+  if(buf->off < buf->len) {
+    size_t l = MIN(length, buf->len - buf->off);
+    memcpy(data, buf->data + buf->off, l);
+    buf->off += l; 
+  }
+  return CAIRO_STATUS_SUCCESS;
+}
+
+int 
+_yeah_load_png_from_buffer(mrb_state *mrb, yeah_image_t *image, unsigned char *data, size_t len) {
+  struct yeah_img_buf buf = {.data = data, .len = len, .off = 0};
+  image->surface = cairo_image_surface_create_from_png_stream(read_png_from_buffer, &buf);
+  cairo_status_t status = cairo_surface_status(image->surface);
+  if(raise_cairo_status(mrb, status)) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+
+static int
+load_png(mrb_state *mrb, yeah_image_t *image, const char *filename) {
+  image->surface = cairo_image_surface_create_from_png(filename);
+
+  cairo_status_t status = cairo_surface_status(image->surface);
+  if(raise_cairo_status(mrb, status)) {
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+
+int
+_yeah_load_jpeg_from_file(mrb_state *mrb, yeah_image_t *image, FILE *file) {
+
+  if(file == NULL) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "file not found");
+    return FALSE;
+  }
+
+  struct jpeg_decompress_struct info;
+  struct jpeg_error_mgr err;
+  int w, h, n_channels, stride, offset = 0;
+  JSAMPARRAY row_buffer;
+
+  info.err = jpeg_std_error(&err);     
+  jpeg_create_decompress(&info); 
+
+  jpeg_stdio_src(&info, file);
+  jpeg_read_header(&info, TRUE);
+
+  jpeg_start_decompress(&info);
+
+  w = info.output_width;
+  h = info.output_height;
+  n_channels = info.num_components;
+  
+  stride = cairo_format_stride_for_width(CAIRO_FORMAT_RGB24, w);
+  image->data  = mrb_malloc(mrb, stride * h);
+
+  row_buffer = (JSAMPARRAY)mrb_malloc(mrb, sizeof(JSAMPROW));
+  row_buffer[0] = (JSAMPROW)mrb_malloc(mrb, sizeof(JSAMPLE) * info.output_width * n_channels);
+
+  assert(info.output_width * n_channels <= stride);
+
+  while(info.output_scanline < info.output_height) {
+    int i;
+
+    jpeg_read_scanlines(&info, row_buffer, 1);
+    for(i = 0; i < w; i++) {
+      image->data[offset + 4 * i + 2] = row_buffer[0][n_channels * i];
+      image->data[offset + 4 * i + 1] = row_buffer[0][n_channels * i + MIN(n_channels - 1, 1)];
+      image->data[offset + 4 * i + 0] = row_buffer[0][n_channels * i + MIN(n_channels - 1, 2)];
+      image->data[offset + 4 * i + 3] = 255;
+    }
+    offset += stride;
+
+  }
+
+  image->surface = cairo_image_surface_create_for_data(image->data, CAIRO_FORMAT_RGB24, w, h, stride);
+
+  jpeg_finish_decompress(&info);
+  jpeg_destroy_decompress(&info);
+  fclose(file);
+
+  return TRUE;
+}
+
+static int
+load_jpeg(mrb_state *mrb, yeah_image_t *image, const char *filename) {
+  FILE *file = fopen(filename, "rb" );
+  return _yeah_load_jpeg_from_file(mrb, image, file);
+}
+
+mrb_value
+_yeah_image_load(mrb_state *mrb, mrb_value self, int (*png)(mrb_state *, yeah_image_t *, const char *),
+                                                int (*jpeg)(mrb_state *, yeah_image_t *, const char *)) {
+
+  yeah_image_t *image;
+  mrb_value mrb_image = image_new(mrb, &image);
+
+  char *filename;
+  mrb_int len;
+
+  mrb_get_args(mrb, "s", &filename, &len);
+  
+  if(len > 4 &&
+     filename[len - 4] == '.' &&
+     filename[len - 3] == 'p' &&
+     filename[len - 2] == 'n' &&
+     filename[len - 1] == 'g') {
+
+      if(!((*png)(mrb, image, filename))) {
+        goto error;
+      }
+  } else if( (len > 4 &&
+              filename[len - 4] == '.' &&
+              filename[len - 3] == 'j' &&
+              filename[len - 2] == 'p' &&
+              filename[len - 1] == 'g') ||
+              (len > 5 &&
+              filename[len - 5] == '.' &&
+              filename[len - 4] == 'j' &&
+              filename[len - 3] == 'p' &&
+              filename[len - 2] == 'e' &&
+              filename[len - 1] == 'g'
+             )) {
+    if(!((*jpeg)(mrb, image, filename))) {
+      goto error;
+    }
+  } else {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "unknown image format");
+    return mrb_nil_value();
+  }
+
+  return mrb_image;
+
+error:
+  return mrb_nil_value();
+
+}
+
+static mrb_value
+image_load(mrb_state *mrb, mrb_value self) {
+  return _yeah_image_load(mrb, self, load_png, load_jpeg);
+}
+
+static mrb_value
+canvas_initialize(mrb_state *mrb, mrb_value self) {
+  yeah_canvas_t *canvas = (yeah_canvas_t *) mrb_calloc(mrb, sizeof(yeah_canvas_t), 1);
+
+  DATA_PTR(self) = canvas;
+  DATA_TYPE(self) = &_yeah_canvas_type_info;
+
+  mrb_int w, h;
+  mrb_get_args(mrb, "ii", &w, &h);
+
+  canvas->width = w;
+  canvas->height = h;
+  canvas->surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, canvas->width, canvas->height);
+  canvas->cr = cairo_create(canvas->surface);
+
+  return self;
+}
+
+
+static mrb_value
+canvas_draw(mrb_state *mrb, mrb_value self) {
+  mrb_raise(mrb, E_RUNTIME_ERROR, "override this method");
+  return self;
+}
+
+static mrb_value
+canvas_color(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_int r, g, b;
+  double a = 1.0;
+  mrb_value _a;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_int n_args = mrb_get_args(mrb, "iii|o", &r, &g, &b, &_a);
+
+  if(n_args > 3) {
+    switch (mrb_type(_a)) {
+        case MRB_TT_FIXNUM:
+          a = (double)mrb_fixnum(_a) / 255.0;
+          break;
+        case MRB_TT_FLOAT:
+          a = mrb_float(_a);
+          break;
+        default:
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid alpha argument");
+          return self;
+    }
+  }
+
+
+  cairo_set_source_rgba(cr, (double)r / 255.0, (double)g / 255.0, (double)b / 255.0, a);
+
+  return self;
+}
+
+static mrb_value
+canvas_image(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_value mrb_image;
+  yeah_image_t *image;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "o", &mrb_image);
+  Data_Get_Struct(mrb, mrb_image, &_yeah_image_type_info, image);
+
+  cairo_set_source_surface(cr, image->surface, 0, 0);
+
+  return self;
+}
+
+
+static void
+_cairo_ellipse(cairo_t *cr, double cx, double cy, double rw, double rh) {
+  cairo_save(cr);
+  cairo_translate(cr, cx, cy);
+  cairo_scale(cr, rw / 2., rh / 2.);
+  cairo_arc(cr, 0., 0., 1., 0., 2 * M_PI);
+  cairo_restore(cr);
+}
+
+static mrb_value
+canvas_ellipse(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_float cx, cy, rw, rh;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "ffff", &cx, &cy, &rw, &rh);
+
+  _cairo_ellipse(cr, cx, cy, rw, rh);
+
+  return self;
+}
+
+static mrb_value
+canvas_circle(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_float cx, cy, r;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "fff", &cx, &cy, &r);
+
+  _cairo_ellipse(cr, cx, cy, r, r);
+
+  return self;
+}
+
+
+static mrb_value
+canvas_rect(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_float x, y, w, h;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "ffff", &x, &y, &w, &h);
+
+  cairo_rectangle(cr, x, y, w, h);
+
+  return self;
+}
+
+static mrb_value
+canvas_rounded_rect(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_float x, y, w, h, r;
+  double deg = M_PI / 180.0;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "fffff", &x, &y, &w, &h, &r);
+  /* From: http://cairographics.org/samples/rounded_rectangle/ */
+  cairo_new_path(cr);
+  cairo_arc(cr, x + w - r, y + r, r, -90 * deg, 0 * deg);
+  cairo_arc(cr, x + w - r, y + h - r, r, 0 * deg, 90 * deg);
+  cairo_arc(cr, x + r, y + h - r, r, 90 * deg, 180 * deg);
+  cairo_arc(cr, x + r, y + r, r, 180 * deg, 270 * deg);
+  cairo_close_path (cr);
+
+  return self;
+}
+
+
+
+
+static mrb_value
+canvas_text(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_float x, y;
+  char *text;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "ffz", &x, &y, &text);
+
+  cairo_move_to(cr, (double)x, (double)y);
+  cairo_text_path(cr, text);
+
+  return self;
+}
+
+static mrb_value
+canvas_font_size(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_float s;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "f", &s);
+
+  cairo_set_font_size(cr, s);
+
+  return self;
+}
+
+static mrb_value
+canvas_line_width(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_float w;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "f", &w);
+
+  cairo_set_line_width(cr, (double) w);
+
+  return self;
+}
+
+static int
+_load_path_args(mrb_state *mrb, mrb_value argv[], int i, double args[], int n) {
+  int j;
+  for(j = 0; j < n; j++) {
+    mrb_value v = argv[i + j + 1];
+    switch (mrb_type(v)) {
+      case MRB_TT_FIXNUM:
+        args[j] = (double) mrb_fixnum(v);
+        break;
+      case MRB_TT_FLOAT:
+        args[j] = (double) mrb_float(v);
+        break;
+      default:
+        goto leave;
+    }
+  }
+leave:
+  return j;
+}
+
+static mrb_value
+canvas_path(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_value *argv;
+  mrb_int argc;
+#define MAX_ARGS 6
+  double args[MAX_ARGS];
+  int i = 0;
+
+  CANVAS_DEFAULT_DECL_INITS;
+
+  cairo_new_path(cr);
+
+  mrb_get_args(mrb, "*", &argv, &argc);
+
+  while(i < argc) {
+    mrb_value v = argv[i];
+    int argc;
+
+    if(mrb_type(v) == MRB_TT_SYMBOL) {
+      mrb_sym command = mrb_symbol(v);
+      if(command == id_m) {
+        double cx, cy;
+        argc = _load_path_args(mrb, argv, i, args, 2);
+        if(argc < 2) goto invalid_path_args;
+        cairo_get_current_point(cr, &cx, &cy);
+        cairo_move_to(cr, cx + args[0], cy + args[1]);
+      } else if(command == id_M) {
+        argc = _load_path_args(mrb, argv, i, args, 2);
+        if(argc < 2) goto invalid_path_args;
+        cairo_move_to(cr,  args[0], args[1]);
+      } else if(command == id_z || command == id_Z) {
+        argc = 0;
+        cairo_close_path(cr);
+      } else if(command == id_l) {
+        argc = _load_path_args(mrb, argv, i, args, 2);
+        if(argc < 2) goto invalid_path_args;
+        cairo_rel_line_to(cr,  args[0], args[1]);
+      } else if(command == id_L) {
+        argc = _load_path_args(mrb, argv, i, args, 2);
+        if(argc < 2) goto invalid_path_args;
+        cairo_line_to(cr,  args[0], args[1]);
+      } else if(command == id_h) {
+        argc = _load_path_args(mrb, argv, i, args, 1);
+        if(argc < 1) goto invalid_path_args;
+        cairo_rel_line_to(cr, args[0], 0);
+      } else if(command == id_H) {
+        double cx, cy;
+        argc = _load_path_args(mrb, argv, i, args, 1);
+        if(argc < 1) goto invalid_path_args;
+        cairo_get_current_point(cr, &cx, &cy);
+        cairo_line_to(cr, args[0], cy);
+      } else if(command == id_V) {
+        double cx, cy;
+        argc = _load_path_args(mrb, argv, i, args, 1);
+        if(argc < 1) goto invalid_path_args;
+        cairo_get_current_point(cr, &cx, &cy);
+        cairo_line_to(cr, cx, args[0]);
+      } else if(command == id_v) {
+        argc = _load_path_args(mrb, argv, i, args, 1);
+        if(argc < 1) goto invalid_path_args;
+        cairo_rel_line_to(cr, 0, args[0]);
+      } else if(command == id_c || command == id_C) {
+        argc = _load_path_args(mrb, argv, i, args, 6);
+        if(argc < 6) goto invalid_path_args;
+        if(command == id_c) {
+          cairo_rel_curve_to(cr, args[0], args[1], args[2], args[3], args[4], args[5]);
+        } else {
+          cairo_curve_to(cr, args[0], args[1], args[2], args[3], args[4], args[5]);
+        }
+      } else if(command == id_a || command == id_A) {
+        double ax, ay;
+        argc = _load_path_args(mrb, argv, i, args, 6);
+        if(argc < 5) goto invalid_path_args;
+
+        if(command == id_A) {
+          ax = args[0];
+          ay = args[1];
+        } else {
+          double cx, cy;
+          cairo_get_current_point(cr, &cx, &cy);
+          ax = cx + args[0];
+          ay = cy + args[1];
+        }
+
+        if(argc > 5 && args[5] > 0) {
+          cairo_arc_negative(cr,
+                              ax,
+                              ay,
+                              args[2],
+                              args[3],
+                              args[4]);
+        } else {
+          cairo_arc(cr,
+                    ax,
+                    ay,
+                    args[2],
+                    args[3],
+                    args[4]);
+        }
+      } else {
+        goto invalid_path_specifier;
+      }
+    } else {
+      goto invalid_path_args;
+    }
+
+    i += argc + 1;
+  }
+
+#undef MAX_ARGS
+  return self;
+
+invalid_path_args:
+  mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid path arguments");
+  return self;
+
+
+invalid_path_specifier:
+  mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid path specifier");
+  return self;
+
+}
+
+static mrb_value
+canvas_fill(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_bool preserve = FALSE;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "|b", &preserve);
+  if(!preserve) {
+    cairo_fill(cr);
+  } else {
+    cairo_fill_preserve(cr);
+  }
+
+  return self;
+}
+
+static mrb_value
+canvas_stroke(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_bool preserve = FALSE;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "|b", &preserve);
+  if(!preserve) {
+    cairo_stroke(cr);
+  } else {
+    cairo_stroke_preserve(cr);
+  }
+
+  return self;
+}
+
+static mrb_value
+canvas_clear(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  cairo_paint(cr);
+
+  return self;
+}
+
+static mrb_value
+canvas_push(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_value blk;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "&", &blk);
+
+  cairo_save(cr);
+
+  if(!mrb_nil_p(blk)) {
+    mrb_funcall_with_block(mrb, self, id_instance_eval, 0, NULL, blk);
+    cairo_restore(cr);
+  }
+
+  return self;
+}
+
+static mrb_value
+canvas_translate(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  double x, y;
+  mrb_value block;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "ff&", &x, &y, &block);
+
+  cairo_translate(cr, x, y);
+  if(!mrb_nil_p(block)) {
+    mrb_funcall_with_block(mrb, self, id_instance_eval, 0, NULL, block);
+    cairo_translate(cr, -x, -y);
+  }
+  return self;
+}
+
+static mrb_value
+canvas_scale(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  double x, y;
+  mrb_value block;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "ff&", &x, &y, &block);
+
+  if(!mrb_nil_p(block)) {
+    cairo_save(cr);
+  }
+
+  cairo_scale(cr, x, y);
+
+  if(!mrb_nil_p(block)) {
+    mrb_funcall_with_block(mrb, self, id_instance_eval, 0, NULL, block);
+    cairo_restore(cr);
+  }
+  return self;
+}
+
+static mrb_value
+canvas_clip(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_bool preserve = FALSE;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "|b", &preserve);
+  if(!preserve) {
+    cairo_clip(cr);
+  } else {
+    cairo_clip_preserve(cr);
+  }
+  return self;
+}
+
+static mrb_value
+canvas_rotate(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  double r;
+  mrb_value block;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "f&", &r, &block);
+
+  cairo_rotate(cr, r);
+  if(!mrb_nil_p(block)) {
+    mrb_funcall_with_block(mrb, self, id_instance_eval, 0, NULL, block);
+    cairo_rotate(cr, -r);
+  }
+  return self;
+}
+
+static mrb_value
+canvas_pop(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  cairo_restore(cr);
+
+  return self;
+}
+
+cairo_status_t cairo_write_to_mrb_str (void *user_data,
+                                       const unsigned char *data,
+                                       unsigned int length) {
+  mrb_value buf = *((mrb_value *)(((void **)user_data)[0]));
+  mrb_state *mrb = (mrb_state *) ((void **)user_data)[1];
+
+  mrb_str_cat(mrb, buf, (const char *)data, length);
+
+  return CAIRO_STATUS_SUCCESS;
+}
+
+
+static mrb_value
+canvas_snapshot(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_value mrb_image;
+  yeah_image_t *image;
+  cairo_t *image_cr;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_image = image_new(mrb, &image);
+
+  image->surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, canvas->width, canvas->height);
+  image_cr = cairo_create(image->surface);
+  cairo_set_source_surface(image_cr, canvas->surface, 0, 0);
+  cairo_paint(image_cr);
+  cairo_destroy(image_cr);
+
+  return mrb_image;
+}
+
+static mrb_value
+image_to_png(mrb_state *mrb, mrb_value self) {
+  yeah_image_t *image;
+  cairo_status_t status;
+  mrb_value retval;
+  char *filename;
+  Data_Get_Struct(mrb, self, &_yeah_image_type_info, image);
+
+  if(image->surface == NULL) {
+    return mrb_nil_value();
+  }
+
+  if(mrb_get_args(mrb, "|z", &filename) > 0) {
+    status = cairo_surface_write_to_png(image->surface, filename);
+    retval = mrb_true_value();
+  } else {
+    void *data[2];
+    retval = mrb_str_buf_new(mrb, 64);
+    data[0] = &retval;
+    data[1] = mrb;
+    status = cairo_surface_write_to_png_stream(image->surface,
+                                               cairo_write_to_mrb_str,
+                                               data);
+  }
+
+  if(raise_cairo_status(mrb, status)) {
+    return mrb_nil_value();
+  }
+
+  return retval;
+}
+
+static mrb_value
+image_width(mrb_state *mrb, mrb_value self) {
+  yeah_image_t *image;
+  Data_Get_Struct(mrb, self, &_yeah_image_type_info, image);
+
+  return mrb_fixnum_value(cairo_image_surface_get_width(image->surface));
+}
+
+static mrb_value
+image_height(mrb_state *mrb, mrb_value self) {
+  yeah_image_t *image;
+  Data_Get_Struct(mrb, self, &_yeah_image_type_info, image);
+
+  return mrb_fixnum_value(cairo_image_surface_get_height(image->surface));
+}
+
+void
+mrb_mruby_yeah_canvas_gem_init(mrb_state *mrb) {
+  mYeah = mrb_define_module(mrb, "Yeah");
+
+  cCanvas = mrb_define_class_under(mrb, mYeah, "Canvas", mrb->object_class);
+  MRB_SET_INSTANCE_TT(cCanvas, MRB_TT_DATA);
+
+  cImage = mrb_define_class_under(mrb, mYeah, "Image", mrb->object_class);
+  MRB_SET_INSTANCE_TT(cImage, MRB_TT_DATA);
+
+  mrb_define_method(mrb, cCanvas, "initialize", canvas_initialize, ARGS_REQ(2));
+  mrb_define_method(mrb, cCanvas, "draw", canvas_draw, ARGS_NONE());
+
+  mrb_define_method(mrb, cCanvas, "color", canvas_color, ARGS_REQ(3) | ARGS_OPT(1));
+  mrb_define_method(mrb, cCanvas, "image", canvas_image, ARGS_REQ(1));
+  mrb_define_method(mrb, cCanvas, "ellipse", canvas_ellipse, ARGS_REQ(4));
+  mrb_define_method(mrb, cCanvas, "circle", canvas_circle, ARGS_REQ(3));
+  mrb_define_method(mrb, cCanvas, "rect", canvas_rect, ARGS_REQ(4));
+  mrb_alias_method(mrb, cCanvas, mrb_intern_cstr(mrb, "rectangle"), mrb_intern_cstr(mrb, "rect"));
+  mrb_define_method(mrb, cCanvas, "rounded_rect", canvas_rounded_rect, ARGS_REQ(5));
+  mrb_define_method(mrb, cCanvas, "path", canvas_path, ARGS_ANY());
+  mrb_define_method(mrb, cCanvas, "text", canvas_text, ARGS_REQ(3));
+  mrb_define_method(mrb, cCanvas, "font_size", canvas_font_size, ARGS_REQ(1));
+
+  mrb_define_method(mrb, cCanvas, "fill", canvas_fill, ARGS_OPT(1));
+  mrb_define_method(mrb, cCanvas, "stroke", canvas_stroke, ARGS_OPT(1));
+  mrb_define_method(mrb, cCanvas, "line_width", canvas_line_width, ARGS_REQ(1));
+  mrb_define_method(mrb, cCanvas, "clear", canvas_clear, ARGS_NONE());
+  mrb_define_method(mrb, cCanvas, "push", canvas_push, ARGS_BLOCK());
+  mrb_define_method(mrb, cCanvas, "pop", canvas_pop, ARGS_NONE());
+  mrb_define_method(mrb, cCanvas, "translate", canvas_translate, ARGS_REQ(2) | ARGS_BLOCK());
+  mrb_define_method(mrb, cCanvas, "clip", canvas_clip, ARGS_OPT(1));
+  mrb_define_method(mrb, cCanvas, "scale", canvas_scale, ARGS_REQ(2) | ARGS_BLOCK());
+  mrb_define_method(mrb, cCanvas, "rotate", canvas_rotate, ARGS_REQ(1) | ARGS_BLOCK());
+  mrb_define_method(mrb, cCanvas,  "snapshot", canvas_snapshot, ARGS_NONE());
+
+
+  mrb_define_class_method(mrb, cImage, "load", image_load, ARGS_REQ(1));
+  mrb_undef_class_method(mrb, cImage, "new");
+
+  mrb_define_method(mrb, cImage, "to_png", image_to_png, ARGS_OPT(1));
+  mrb_define_method(mrb, cImage, "width", image_width, ARGS_NONE());
+  mrb_define_method(mrb, cImage, "height", image_height, ARGS_NONE());
+
+  id_m = mrb_intern_cstr(mrb, "m");
+  id_M = mrb_intern_cstr(mrb, "M");
+  id_Z = mrb_intern_cstr(mrb, "Z");
+  id_z = mrb_intern_cstr(mrb, "z");
+  id_l = mrb_intern_cstr(mrb, "l");
+  id_L = mrb_intern_cstr(mrb, "L");
+  id_H = mrb_intern_cstr(mrb, "H");
+  id_h = mrb_intern_cstr(mrb, "h");
+  id_V = mrb_intern_cstr(mrb, "V");
+  id_v = mrb_intern_cstr(mrb, "v");
+  id_C = mrb_intern_cstr(mrb, "C");
+  id_c = mrb_intern_cstr(mrb, "c");
+  id_A = mrb_intern_cstr(mrb, "A");
+  id_a = mrb_intern_cstr(mrb, "a");
+  id_instance_eval = mrb_intern_cstr(mrb, "instance_eval");
+}
+
+void
+mrb_mruby_yeah_canvas_gem_final(mrb_state* mrb) {
+  /* finalizer */
+}
