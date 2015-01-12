@@ -16,6 +16,7 @@
 #include <jpeglib.h>
 
 #include <cairo.h>
+#include <cairo/cairo-ft.h>
 
 static mrb_sym id_m;
 static mrb_sym id_M;
@@ -33,10 +34,17 @@ static mrb_sym id_c;
 static mrb_sym id_A;
 static mrb_sym id_a;
 static mrb_sym id_instance_eval;
+static mrb_sym id_normal;
+static mrb_sym id_italic;
+static mrb_sym id_oblique;
+static mrb_sym id_bold;
 
 struct RClass *mYeah;
 struct RClass *cCanvas;
 struct RClass *cImage;
+struct RClass *cFont;
+
+static FT_Library ft_lib;
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
@@ -72,6 +80,17 @@ image_free(mrb_state *mrb, void *ptr) {
   mrb_free(mrb, ptr);
 }
 
+static void
+font_free(mrb_state *mrb, void *ptr) {
+  yeah_font_t *font = (yeah_font_t *) ptr;
+
+  if(font->cr_face != NULL) {
+    cairo_font_face_destroy(font->cr_face);
+  }
+  FT_Done_Face(font->ft_face);
+  mrb_free(mrb, ptr);
+}
+
 
 #define CANVAS_DEFAULT_DECLS \
   yeah_canvas_t *canvas;\
@@ -86,6 +105,7 @@ image_free(mrb_state *mrb, void *ptr) {
 
 struct mrb_data_type _yeah_canvas_type_info = {"Canvas", canvas_free};
 struct mrb_data_type _yeah_image_type_info = {"Image", image_free};
+struct mrb_data_type _yeah_font_type_info = {"Font", font_free};
 
 static int raise_cairo_status(mrb_state *mrb, cairo_status_t status) {
   switch(status) {
@@ -122,6 +142,19 @@ image_new(mrb_state *mrb, yeah_image_t **rimage) {
   if(*rimage != NULL)  *rimage = image;
 
   return mrb_image;
+}
+
+static mrb_value
+font_new(mrb_state *mrb, yeah_font_t **rfont) {
+  yeah_font_t *font = (yeah_font_t *) mrb_calloc(mrb, sizeof(yeah_font_t), 1);
+  mrb_value mrb_font = mrb_class_new_instance(mrb, 0, NULL, cFont);
+
+  DATA_PTR(mrb_font) = font;
+  DATA_TYPE(mrb_font) = &_yeah_font_type_info;
+
+  if(*rfont != NULL)  *rfont = font;
+
+  return mrb_font;
 }
 
 
@@ -278,6 +311,52 @@ static mrb_value
 image_load(mrb_state *mrb, mrb_value self) {
   return _yeah_image_load(mrb, self, load_png, load_jpeg);
 }
+
+mrb_value
+_yeah_font_load_from_filename(mrb_state *mrb, mrb_value self, const char *filename) {
+
+  yeah_font_t *font;
+  mrb_value mrb_font = font_new(mrb, &font);
+
+  if(FT_New_Face(ft_lib,
+                 filename,
+                 0,
+                 &font->ft_face) != FT_Err_Ok) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "font loading failed");
+    return mrb_nil_value();
+  }
+  return mrb_font;
+}
+
+mrb_value
+_yeah_font_load_from_buffer(mrb_state *mrb, mrb_value self, unsigned char *buf, size_t len) {
+
+  yeah_font_t *font;
+  mrb_value mrb_font = font_new(mrb, &font);
+  FT_Open_Args args;
+
+  args.flags = FT_OPEN_MEMORY;
+  args.memory_base = buf;
+  args.memory_size = len;
+  if(FT_Open_Face(ft_lib,
+                  &args,
+                  0,
+                  &font->ft_face) != FT_Err_Ok) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "font loading failed");
+    return mrb_nil_value();
+  }
+  return mrb_font;
+}
+
+static mrb_value
+font_load(mrb_state *mrb, mrb_value self) {
+  char *filename;
+  mrb_int len;
+  mrb_get_args(mrb, "s", &filename, &len);
+
+  return _yeah_font_load_from_filename(mrb, self, filename);
+}
+
 
 static mrb_value
 canvas_initialize(mrb_state *mrb, mrb_value self) {
@@ -438,6 +517,45 @@ canvas_font_size(mrb_state *mrb, mrb_value self) {
   mrb_get_args(mrb, "f", &s);
 
   cairo_set_font_size(cr, s);
+
+  return self;
+}
+
+static mrb_value
+canvas_font(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_value mrb_font;
+  mrb_sym sym_slant, sym_weight;
+  cairo_font_slant_t slant = CAIRO_FONT_SLANT_NORMAL;
+  cairo_font_weight_t weight = CAIRO_FONT_WEIGHT_NORMAL;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "o|nn", &mrb_font, &sym_weight, &sym_slant);
+
+  switch (mrb_type(mrb_font)) {
+    case MRB_TT_DATA: {
+      yeah_font_t *font;
+      Data_Get_Struct(mrb, mrb_font, &_yeah_font_type_info, font);
+      if(font->cr_face == NULL) {
+        font->cr_face = cairo_ft_font_face_create_for_ft_face(font->ft_face, 0);
+      }
+      cairo_set_font_face(canvas->cr, font->cr_face);
+      break;
+    }
+    case MRB_TT_STRING: {
+      char *font_name = mrb_str_to_cstr(mrb, mrb_font);
+      if(sym_slant == id_italic) slant = CAIRO_FONT_SLANT_ITALIC;
+      else if(sym_slant == id_oblique) slant = CAIRO_FONT_SLANT_OBLIQUE;
+
+      if(sym_weight == id_bold) weight = CAIRO_FONT_WEIGHT_BOLD;
+      cairo_select_font_face(canvas->cr, font_name, slant, weight);
+      break;
+    }
+    default: {
+      mrb_raise(mrb, E_ARGUMENT_ERROR, "font must either be String or Font");
+      return mrb_nil_value();
+    }
+  }
 
   return self;
 }
@@ -838,10 +956,16 @@ image_height(mrb_state *mrb, mrb_value self) {
 
 void
 mrb_mruby_yeah_canvas_gem_init(mrb_state *mrb) {
+
+  FT_Init_FreeType(&ft_lib);
+
   mYeah = mrb_define_module(mrb, "Yeah");
 
   cCanvas = mrb_define_class_under(mrb, mYeah, "Canvas", mrb->object_class);
   MRB_SET_INSTANCE_TT(cCanvas, MRB_TT_DATA);
+
+  cFont = mrb_define_class_under(mrb, mYeah, "Font", mrb->object_class);
+  MRB_SET_INSTANCE_TT(cFont, MRB_TT_DATA);
 
   cImage = mrb_define_class_under(mrb, mYeah, "Image", mrb->object_class);
   MRB_SET_INSTANCE_TT(cImage, MRB_TT_DATA);
@@ -858,6 +982,7 @@ mrb_mruby_yeah_canvas_gem_init(mrb_state *mrb) {
   mrb_define_method(mrb, cCanvas, "path", canvas_path, ARGS_ANY());
   mrb_define_method(mrb, cCanvas, "text", canvas_text, ARGS_REQ(3));
   mrb_define_method(mrb, cCanvas, "font_size", canvas_font_size, ARGS_REQ(1));
+  mrb_define_method(mrb, cCanvas, "font", canvas_font, ARGS_REQ(1) | ARGS_OPT(2));
 
   mrb_define_method(mrb, cCanvas, "fill", canvas_fill, ARGS_OPT(1));
   mrb_define_method(mrb, cCanvas, "stroke", canvas_stroke, ARGS_OPT(1));
@@ -876,28 +1001,36 @@ mrb_mruby_yeah_canvas_gem_init(mrb_state *mrb) {
   mrb_define_class_method(mrb, cImage, "load", image_load, ARGS_REQ(1));
   mrb_undef_class_method(mrb, cImage, "new");
 
+  mrb_define_class_method(mrb, cFont, "load", font_load, ARGS_REQ(1));
+  mrb_undef_class_method(mrb, cFont, "new");
+
   mrb_define_method(mrb, cImage, "to_png", image_to_png, ARGS_OPT(1));
   mrb_define_method(mrb, cImage, "width", image_width, ARGS_NONE());
   mrb_define_method(mrb, cImage, "height", image_height, ARGS_NONE());
 
-  id_m = mrb_intern_cstr(mrb, "m");
-  id_M = mrb_intern_cstr(mrb, "M");
-  id_Z = mrb_intern_cstr(mrb, "Z");
-  id_z = mrb_intern_cstr(mrb, "z");
-  id_l = mrb_intern_cstr(mrb, "l");
-  id_L = mrb_intern_cstr(mrb, "L");
-  id_H = mrb_intern_cstr(mrb, "H");
-  id_h = mrb_intern_cstr(mrb, "h");
-  id_V = mrb_intern_cstr(mrb, "V");
-  id_v = mrb_intern_cstr(mrb, "v");
-  id_C = mrb_intern_cstr(mrb, "C");
-  id_c = mrb_intern_cstr(mrb, "c");
-  id_A = mrb_intern_cstr(mrb, "A");
-  id_a = mrb_intern_cstr(mrb, "a");
-  id_instance_eval = mrb_intern_cstr(mrb, "instance_eval");
+  id_m = mrb_intern_lit(mrb, "m");
+  id_M = mrb_intern_lit(mrb, "M");
+  id_Z = mrb_intern_lit(mrb, "Z");
+  id_z = mrb_intern_lit(mrb, "z");
+  id_l = mrb_intern_lit(mrb, "l");
+  id_L = mrb_intern_lit(mrb, "L");
+  id_H = mrb_intern_lit(mrb, "H");
+  id_h = mrb_intern_lit(mrb, "h");
+  id_V = mrb_intern_lit(mrb, "V");
+  id_v = mrb_intern_lit(mrb, "v");
+  id_C = mrb_intern_lit(mrb, "C");
+  id_c = mrb_intern_lit(mrb, "c");
+  id_A = mrb_intern_lit(mrb, "A");
+  id_a = mrb_intern_lit(mrb, "a");
+  id_instance_eval = mrb_intern_lit(mrb, "instance_eval");
+  id_normal = mrb_intern_lit(mrb, "normal");
+  id_italic = mrb_intern_lit(mrb, "italic");
+  id_oblique = mrb_intern_lit(mrb, "oblique");
+  id_bold = mrb_intern_lit(mrb, "bold");
 }
 
 void
 mrb_mruby_yeah_canvas_gem_final(mrb_state* mrb) {
+  //FT_Done_FreeType(ft_lib);
   /* finalizer */
 }

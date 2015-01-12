@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cairo.h>
+#include <ft2build.h>
+#include FT_FREETYPE_H
 
 typedef struct yeah_canvas_s {
   cairo_t *cr;
@@ -14,6 +16,12 @@ typedef struct yeah_image_s {
   unsigned char *data;
   cairo_surface_t *surface;
 } yeah_image_t;
+
+typedef struct yeah_font_s {
+  FT_Face ft_face;
+  cairo_font_face_t *cr_face;
+} yeah_font_t;
+
 
 struct yeah_img_buf {
   unsigned char *data;
