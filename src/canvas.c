@@ -357,6 +357,19 @@ font_load(mrb_state *mrb, mrb_value self) {
   return _yeah_font_load_from_filename(mrb, self, filename);
 }
 
+static mrb_value
+font_name(mrb_state *mrb, mrb_value self) {
+  yeah_font_t *font;
+  Data_Get_Struct(mrb, self, &_yeah_font_type_info, font);
+
+  const char *name = FT_Get_Postscript_Name(font->ft_face);
+
+  if(name != NULL) {
+    return mrb_str_new_cstr(mrb, name);
+  } else {
+    return mrb_nil_value();
+  }
+}
 
 static mrb_value
 canvas_initialize(mrb_state *mrb, mrb_value self) {
@@ -1003,6 +1016,7 @@ mrb_mruby_yeah_canvas_gem_init(mrb_state *mrb) {
 
   mrb_define_class_method(mrb, cFont, "load", font_load, ARGS_REQ(1));
   mrb_undef_class_method(mrb, cFont, "new");
+  mrb_define_method(mrb, cFont, "name", font_name, ARGS_NONE());
 
   mrb_define_method(mrb, cImage, "to_png", image_to_png, ARGS_OPT(1));
   mrb_define_method(mrb, cImage, "width", image_width, ARGS_NONE());

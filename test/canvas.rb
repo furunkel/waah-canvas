@@ -67,3 +67,11 @@ assert('Image#height') do
   img = Yeah::Image.load '../../test/bg.png'
   assert_equal img.height, 310
 end
+
+assert('Font#name') do
+  ttf_font = Yeah::Font.load "../../test/Tuffy.ttf"
+  otf_font = Yeah::Font.load "../../test/Tuffy.otf"
+
+  assert_equal ttf_font.name, 'Tuffy'
+  assert_equal otf_font.name, 'Tuffy'
+end
