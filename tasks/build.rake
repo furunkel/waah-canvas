@@ -17,14 +17,9 @@ DEP_TARBALLS = {
 
 module ::Build
 
-  def root_dir
-    raise 'missing platform' unless $target_platform
-    File.join tmp_dir, $target_platform
-  end
-
   def tarball(name)
     DEP_TARBALLS[name].split('/').last =~ /(\.tar.*)$/
-    File.join(tmp_dir, "#{name}#{$1}")
+    File.join(build_dir, "#{name}#{$1}")
   end
 
   def tarballs
@@ -34,7 +29,7 @@ module ::Build
   end
 
   def dep_dir(name)
-    File.join Build.tmp_dir, name.to_s
+    File.join Build.build_dir, name.to_s
   end
 
   def pixman_include_cpu_features
@@ -71,15 +66,15 @@ module ::Build
   extend self
 end
 
-directory Build.tmp_dir
+directory Build.build_dir
 directory Build.root_dir
 
 DEP_TARBALLS.each do |name, _|
 
-  directory Build.dep_dir(name) => [Build.tmp_dir, Build.tarball(name)] do |t|
+  directory Build.dep_dir(name) => [Build.build_dir, Build.tarball(name)] do |t|
     tarball_file = Dir["#{t.name}.tar.{bz2,xz,gz}"].first
-    sh "tar xf #{tarball_file} -C #{Build.tmp_dir}"
-    dirs = Dir.entries(Build.tmp_dir).map{|f| File.join(Build.tmp_dir, f)}.select{|f| File.directory? f}
+    sh "tar xf #{tarball_file} -C #{Build.build_dir}"
+    dirs = Dir.entries(Build.build_dir).map{|f| File.join(Build.build_dir, f)}.select{|f| File.directory? f}
     dir = dirs.grep(/#{name}/).first
     if dir.nil? && name == :libjpeg
       dir = dirs.grep(/jpeg/).first
@@ -91,7 +86,7 @@ DEP_TARBALLS.each do |name, _|
     end
   end
 
-  file Build.tarball(name) => Build.tmp_dir do |t|
+  file Build.tarball(name) => Build.build_dir do |t|
     sh "wget '#{DEP_TARBALLS[name]}' -O #{t.name}"
   end
 end

@@ -1,11 +1,15 @@
 
 module ::Build
-  def tmp_dir
+  def build_dir
     File.join __dir__, 'tmp', 'build'
+  end
+
+  def root_dir
+    raise 'missing platform' unless $target_platform
+    File.join build_dir, $target_platform
   end
 end
 
-load File.join __dir__, 'tasks', 'build.rake'
 load File.join __dir__, 'tasks', 'pkg_config.rake'
 
 MRuby::Gem::Specification.new('waah-canvas') do |spec|
@@ -71,6 +75,8 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
         ENV['AR'] = build_conf.archiver.command
 
         cc.flags.first.unshift "-I#{File.join(Build.root_dir, 'include')}"
+
+        load File.join __dir__, 'tasks', 'build.rake'
         Rake::Task[:build_deps].invoke
       end
 
