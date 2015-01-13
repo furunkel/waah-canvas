@@ -6,7 +6,7 @@
 #include <mruby/variable.h>
 #include <mruby/string.h>
 
-#include "mruby-canvas.h"
+#include "waah-canvas.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -1237,7 +1237,7 @@ image_height(mrb_state *mrb, mrb_value self) {
 }
 
 void
-mrb_mruby_waah_canvas_gem_init(mrb_state *mrb) {
+mrb_waah_canvas_gem_init(mrb_state *mrb) {
 
   FT_Init_FreeType(&ft_lib);
 
@@ -1338,7 +1338,7 @@ mrb_mruby_waah_canvas_gem_init(mrb_state *mrb) {
 }
 
 void
-mrb_mruby_waah_canvas_gem_final(mrb_state* mrb) {
+mrb_waah_canvas_gem_final(mrb_state* mrb) {
   //FT_Done_FreeType(ft_lib);
   /* finalizer */
 }

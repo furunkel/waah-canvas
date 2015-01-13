@@ -8,7 +8,7 @@ end
 load File.join __dir__, 'tasks', 'build.rake'
 load File.join __dir__, 'tasks', 'pkg_config.rake'
 
-MRuby::Gem::Specification.new('mruby-waah-canvas') do |spec|
+MRuby::Gem::Specification.new('waah-canvas') do |spec|
   spec.license = 'MPL 2.0'
   spec.author  = 'furunkel'
 
@@ -54,7 +54,7 @@ MRuby::Gem::Specification.new('mruby-waah-canvas') do |spec|
         linker.flags_before_libraries << "-Wl,-Bdynamic"
       end
 
-      cc.defines << "YEAH_PLATFORM_#{platform.to_s.upcase}"
+      cc.defines << "WAAH_PLATFORM_#{platform.to_s.upcase}"
 
       if build_deps
         ENV['CC'] = build_conf.cc.command
