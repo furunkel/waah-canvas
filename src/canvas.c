@@ -409,6 +409,17 @@ font_name(mrb_state *mrb, mrb_value self) {
   }
 }
 
+
+static mrb_value
+path_initialize(mrb_state *mrb, mrb_value self) {
+  yeah_path_t *path = (yeah_path_t *) mrb_calloc(mrb, sizeof(yeah_path_t), 1);
+
+  DATA_PTR(self) = path;
+  DATA_TYPE(self) = &_yeah_path_type_info;
+
+  return self;
+}
+
 static mrb_value
 canvas_initialize(mrb_state *mrb, mrb_value self) {
   yeah_canvas_t *canvas = (yeah_canvas_t *) mrb_calloc(mrb, sizeof(yeah_canvas_t), 1);
@@ -588,7 +599,8 @@ canvas_circle(mrb_state *mrb, mrb_value self) {
 
   mrb_get_args(mrb, "fff", &cx, &cy, &r);
 
-  _cairo_ellipse(cr, cx, cy, r, r);
+  cairo_arc(cr, cx, cy, r, 0, 2 * M_PI);
+  /*_cairo_ellipse(cr, cx, cy, r, r);*/
 
   return self;
 }
@@ -1153,10 +1165,10 @@ mrb_mruby_yeah_canvas_gem_init(mrb_state *mrb) {
   mrb_define_class_method(mrb, cFont, "load", font_load, ARGS_REQ(1));
   mrb_undef_class_method(mrb, cFont, "new");
   mrb_define_method(mrb, cFont, "name", font_name, ARGS_NONE());
-  
-  /*
-  mrb_define_method(mrb, cPath, "initialize", path_initialize, ARGS_REQ(2));
-  mrb_define_method(mrb, cPath, "move_to", path_initialize, ARGS_REQ(2));
+
+  mrb_define_method(mrb, cPath, "initialize", path_initialize, ARGS_NONE());
+
+  /*mrb_define_method(mrb, cPath, "move_to", path_initialize, ARGS_REQ(2));
   mrb_define_method(mrb, cPath, "line_to", path_initialize, ARGS_REQ(2));
   mrb_define_method(mrb, cPath, "curve_to", path_initialize, ARGS_REQ(2));
   mrb_define_method(mrb, cPath, "i", path_initialize, ARGS_REQ(2));

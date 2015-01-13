@@ -18,7 +18,6 @@ assert('Canvas simple test') do
   c.text 10, 30, "Ruby rules"
   c.fill
 
-
   c.rotate 0.5 do
     c.rect 20, 20, 600, 600
     c.color 0xff, 0, 0
@@ -26,7 +25,7 @@ assert('Canvas simple test') do
   end
 
   c.translate 150, 10 do
-    c.circle 150, 150, 200
+    c.circle 150, 150, 100
     c.image bg_jpg
     c.fill
   end
