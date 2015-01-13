@@ -39,7 +39,7 @@ static mrb_sym id_italic;
 static mrb_sym id_oblique;
 static mrb_sym id_bold;
 
-struct RClass *mYeah;
+struct RClass *mWaah;
 struct RClass *cCanvas;
 struct RClass *cImage;
 struct RClass *cFont;
@@ -52,7 +52,7 @@ static FT_Library ft_lib;
 
 static void
 canvas_free(mrb_state *mrb, void *ptr) {
-  yeah_canvas_t *canvas = (yeah_canvas_t *) ptr;
+  waah_canvas_t *canvas = (waah_canvas_t *) ptr;
 
   if(canvas->cr != NULL) {
     cairo_destroy(canvas->cr);
@@ -72,7 +72,7 @@ canvas_free(mrb_state *mrb, void *ptr) {
 
 static void
 image_free(mrb_state *mrb, void *ptr) {
-  yeah_image_t *image = (yeah_image_t *) ptr;
+  waah_image_t *image = (waah_image_t *) ptr;
   if(image->surface != NULL) {
     cairo_surface_destroy(image->surface);
   }
@@ -84,18 +84,23 @@ image_free(mrb_state *mrb, void *ptr) {
 
 static void
 font_free(mrb_state *mrb, void *ptr) {
-  yeah_font_t *font = (yeah_font_t *) ptr;
+  waah_font_t *font = (waah_font_t *) ptr;
 
   if(font->cr_face != NULL) {
     cairo_font_face_destroy(font->cr_face);
   }
-  FT_Done_Face(font->ft_face);
+  if(font->ft_face != NULL) {
+    FT_Done_Face(font->ft_face);
+  }
+  if(font->fc_pattern != NULL) {
+    FcPatternDestroy(font->fc_pattern);
+  }
   mrb_free(mrb, ptr);
 }
 
 static void
 pattern_free(mrb_state *mrb, void *ptr) {
-  yeah_pattern_t *pattern = (yeah_pattern_t *) ptr;
+  waah_pattern_t *pattern = (waah_pattern_t *) ptr;
 
   if(pattern->cr_pattern != NULL) {
     cairo_pattern_destroy(pattern->cr_pattern);
@@ -105,7 +110,7 @@ pattern_free(mrb_state *mrb, void *ptr) {
 
 static void
 path_free(mrb_state *mrb, void *ptr) {
-  yeah_path_t *path = (yeah_path_t *) ptr;
+  waah_path_t *path = (waah_path_t *) ptr;
 
   if(path->cr_path != NULL) {
     cairo_path_destroy(path->cr_path);
@@ -115,21 +120,21 @@ path_free(mrb_state *mrb, void *ptr) {
 
 
 #define CANVAS_DEFAULT_DECLS \
-  yeah_canvas_t *canvas;\
+  waah_canvas_t *canvas;\
   cairo_t *cr;\
   (void) cr;
 
 #define CANVAS_DEFAULT_DECL_INITS \
-  Data_Get_Struct(mrb, self, &_yeah_canvas_type_info, canvas);\
+  Data_Get_Struct(mrb, self, &_waah_canvas_type_info, canvas);\
   cr = canvas->cr;
 
 
 
-struct mrb_data_type _yeah_canvas_type_info = {"Canvas", canvas_free};
-struct mrb_data_type _yeah_image_type_info = {"Image", image_free};
-struct mrb_data_type _yeah_font_type_info = {"Font", font_free};
-struct mrb_data_type _yeah_pattern_type_info = {"Pattern", pattern_free};
-struct mrb_data_type _yeah_path_type_info = {"Path", path_free};
+struct mrb_data_type _waah_canvas_type_info = {"Canvas", canvas_free};
+struct mrb_data_type _waah_image_type_info = {"Image", image_free};
+struct mrb_data_type _waah_font_type_info = {"Font", font_free};
+struct mrb_data_type _waah_pattern_type_info = {"Pattern", pattern_free};
+struct mrb_data_type _waah_path_type_info = {"Path", path_free};
 
 static int raise_cairo_status(mrb_state *mrb, cairo_status_t status) {
   switch(status) {
@@ -156,12 +161,12 @@ static int raise_cairo_status(mrb_state *mrb, cairo_status_t status) {
 
 
 static mrb_value
-image_new(mrb_state *mrb, yeah_image_t **rimage) {
-  yeah_image_t *image = (yeah_image_t *) mrb_calloc(mrb, sizeof(yeah_image_t), 1);
+image_new(mrb_state *mrb, waah_image_t **rimage) {
+  waah_image_t *image = (waah_image_t *) mrb_calloc(mrb, sizeof(waah_image_t), 1);
   mrb_value mrb_image = mrb_class_new_instance(mrb, 0, NULL, cImage);
 
   DATA_PTR(mrb_image) = image;
-  DATA_TYPE(mrb_image) = &_yeah_image_type_info;
+  DATA_TYPE(mrb_image) = &_waah_image_type_info;
 
   if(*rimage != NULL)  *rimage = image;
 
@@ -169,12 +174,12 @@ image_new(mrb_state *mrb, yeah_image_t **rimage) {
 }
 
 static mrb_value
-font_new(mrb_state *mrb, yeah_font_t **rfont) {
-  yeah_font_t *font = (yeah_font_t *) mrb_calloc(mrb, sizeof(yeah_font_t), 1);
+font_new(mrb_state *mrb, waah_font_t **rfont) {
+  waah_font_t *font = (waah_font_t *) mrb_calloc(mrb, sizeof(waah_font_t), 1);
   mrb_value mrb_font = mrb_class_new_instance(mrb, 0, NULL, cFont);
 
   DATA_PTR(mrb_font) = font;
-  DATA_TYPE(mrb_font) = &_yeah_font_type_info;
+  DATA_TYPE(mrb_font) = &_waah_font_type_info;
 
   if(*rfont != NULL)  *rfont = font;
 
@@ -182,12 +187,12 @@ font_new(mrb_state *mrb, yeah_font_t **rfont) {
 }
 
 static mrb_value
-pattern_new(mrb_state *mrb, yeah_pattern_t **rpattern) {
-  yeah_pattern_t *pattern = (yeah_pattern_t *) mrb_calloc(mrb, sizeof(yeah_pattern_t), 1);
+pattern_new(mrb_state *mrb, waah_pattern_t **rpattern) {
+  waah_pattern_t *pattern = (waah_pattern_t *) mrb_calloc(mrb, sizeof(waah_pattern_t), 1);
   mrb_value mrb_pattern = mrb_class_new_instance(mrb, 0, NULL, cPattern);
 
   DATA_PTR(mrb_pattern) = pattern;
-  DATA_TYPE(mrb_pattern) = &_yeah_pattern_type_info;
+  DATA_TYPE(mrb_pattern) = &_waah_pattern_type_info;
 
   if(*rpattern != NULL)  *rpattern = pattern;
 
@@ -200,7 +205,7 @@ static cairo_status_t
 read_png_from_buffer (void *closure,
                       unsigned char *data,
                       unsigned int length) {
-  struct yeah_img_buf *buf = (struct yeah_img_buf *) closure;
+  struct waah_img_buf *buf = (struct waah_img_buf *) closure;
 
   if(buf->off < buf->len) {
     size_t l = MIN(length, buf->len - buf->off);
@@ -211,8 +216,8 @@ read_png_from_buffer (void *closure,
 }
 
 int
-_yeah_load_png_from_buffer(mrb_state *mrb, yeah_image_t *image, unsigned char *data, size_t len) {
-  struct yeah_img_buf buf = {.data = data, .len = len, .off = 0};
+_waah_load_png_from_buffer(mrb_state *mrb, waah_image_t *image, unsigned char *data, size_t len) {
+  struct waah_img_buf buf = {.data = data, .len = len, .off = 0};
   image->surface = cairo_image_surface_create_from_png_stream(read_png_from_buffer, &buf);
   cairo_status_t status = cairo_surface_status(image->surface);
   if(raise_cairo_status(mrb, status)) {
@@ -223,7 +228,7 @@ _yeah_load_png_from_buffer(mrb_state *mrb, yeah_image_t *image, unsigned char *d
 
 
 static int
-load_png(mrb_state *mrb, yeah_image_t *image, const char *filename) {
+load_png(mrb_state *mrb, waah_image_t *image, const char *filename) {
   image->surface = cairo_image_surface_create_from_png(filename);
 
   cairo_status_t status = cairo_surface_status(image->surface);
@@ -236,7 +241,7 @@ load_png(mrb_state *mrb, yeah_image_t *image, const char *filename) {
 
 
 int
-_yeah_load_jpeg_from_file(mrb_state *mrb, yeah_image_t *image, FILE *file) {
+_waah_load_jpeg_from_file(mrb_state *mrb, waah_image_t *image, FILE *file) {
 
   if(file == NULL) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "file not found");
@@ -292,16 +297,16 @@ _yeah_load_jpeg_from_file(mrb_state *mrb, yeah_image_t *image, FILE *file) {
 }
 
 static int
-load_jpeg(mrb_state *mrb, yeah_image_t *image, const char *filename) {
+load_jpeg(mrb_state *mrb, waah_image_t *image, const char *filename) {
   FILE *file = fopen(filename, "rb" );
-  return _yeah_load_jpeg_from_file(mrb, image, file);
+  return _waah_load_jpeg_from_file(mrb, image, file);
 }
 
 mrb_value
-_yeah_image_load(mrb_state *mrb, mrb_value self, int (*png)(mrb_state *, yeah_image_t *, const char *),
-                                                int (*jpeg)(mrb_state *, yeah_image_t *, const char *)) {
+_waah_image_load(mrb_state *mrb, mrb_value self, int (*png)(mrb_state *, waah_image_t *, const char *),
+                                                int (*jpeg)(mrb_state *, waah_image_t *, const char *)) {
 
-  yeah_image_t *image;
+  waah_image_t *image;
   mrb_value mrb_image = image_new(mrb, &image);
 
   char *filename;
@@ -347,13 +352,13 @@ error:
 
 static mrb_value
 image_load(mrb_state *mrb, mrb_value self) {
-  return _yeah_image_load(mrb, self, load_png, load_jpeg);
+  return _waah_image_load(mrb, self, load_png, load_jpeg);
 }
 
 mrb_value
-_yeah_font_load_from_filename(mrb_state *mrb, mrb_value self, const char *filename) {
+_waah_font_load_from_filename(mrb_state *mrb, mrb_value self, const char *filename) {
 
-  yeah_font_t *font;
+  waah_font_t *font;
   mrb_value mrb_font = font_new(mrb, &font);
 
   if(FT_New_Face(ft_lib,
@@ -367,9 +372,9 @@ _yeah_font_load_from_filename(mrb_state *mrb, mrb_value self, const char *filena
 }
 
 mrb_value
-_yeah_font_load_from_buffer(mrb_state *mrb, mrb_value self, unsigned char *buf, size_t len) {
+_waah_font_load_from_buffer(mrb_state *mrb, mrb_value self, unsigned char *buf, size_t len) {
 
-  yeah_font_t *font;
+  waah_font_t *font;
   mrb_value mrb_font = font_new(mrb, &font);
   FT_Open_Args args;
 
@@ -392,40 +397,168 @@ font_load(mrb_state *mrb, mrb_value self) {
   mrb_int len;
   mrb_get_args(mrb, "s", &filename, &len);
 
-  return _yeah_font_load_from_filename(mrb, self, filename);
+  return _waah_font_load_from_filename(mrb, self, filename);
+}
+
+
+static mrb_value
+font_find(mrb_state *mrb, mrb_value self) {
+#ifdef CAIRO_HAS_FC_FONT
+  char *name;
+  waah_font_t *font;
+  mrb_value mrb_font = font_new(mrb, &font);
+  mrb_int len;
+  FcConfig* config;
+  FcPattern* pat;
+  FcResult result;
+
+  mrb_get_args(mrb, "s", &name, &len);
+  config = FcConfigGetCurrent();
+  pat = FcNameParse((const FcChar8*)name);
+  FcConfigSubstitute(config, pat, FcMatchPattern);
+  FcDefaultSubstitute(pat);
+  font->fc_pattern = FcFontMatch(config, pat, &result);
+  FcPatternDestroy(pat);
+
+  return mrb_font;
+
+#else
+  return mrb_nil_value();
+#endif
+}
+
+
+static mrb_value
+font_list(mrb_state *mrb, mrb_value self) {
+  mrb_value ary = mrb_ary_new(mrb);
+#ifdef CAIRO_HAS_FC_FONT
+  FcPattern *pattern;
+  FcFontSet *font_set;
+  FcObjectSet *os;
+  FcConfig *config;
+  int i;
+
+  config = FcConfigGetCurrent();
+  FcConfigSetRescanInterval(config, 0);
+  pattern = FcPatternCreate();
+  os = FcObjectSetBuild(FC_FAMILY, FC_STYLE, FC_LANG, (char *) 0);
+  font_set = FcFontList(config, pattern, os);
+  for(i = 0;font_set && i < font_set->nfont; i++) {
+    waah_font_t *font;
+    mrb_value mrb_font = font_new(mrb, &font);
+    mrb_ary_push(mrb, ary, mrb_font);
+    font->fc_pattern = font_set->fonts[i];//FcFontSetFont(font_set, i);
+    FcPatternReference(font->fc_pattern);
+  }
+  if(font_set) FcFontSetDestroy(font_set);
+
+#endif
+
+  return ary;
 }
 
 static mrb_value
 font_name(mrb_state *mrb, mrb_value self) {
-  yeah_font_t *font;
-  Data_Get_Struct(mrb, self, &_yeah_font_type_info, font);
+  waah_font_t *font;
+  mrb_value retval;
+  char *name = NULL;
+  int free_name = FALSE;
 
-  const char *name = FT_Get_Postscript_Name(font->ft_face);
+  Data_Get_Struct(mrb, self, &_waah_font_type_info, font);
+
+  if(font->ft_face != NULL) {
+    name = (char *) FT_Get_Postscript_Name(font->ft_face);
+  }
+
+#ifdef CAIRO_HAS_FC_FONT
+  else if(font->fc_pattern != NULL) {
+    name = (char *) FcNameUnparse(font->fc_pattern);
+    free_name = TRUE;
+  }
+#endif
 
   if(name != NULL) {
-    return mrb_str_new_cstr(mrb, name);
+    retval = mrb_str_new_cstr(mrb, name);
   } else {
-    return mrb_nil_value();
+    retval = mrb_nil_value();
   }
+
+  if(free_name) {
+    free(name);
+  }
+
+  return retval;
 }
 
 
+
+
+static mrb_value
+font_get_prop(mrb_state *mrb, mrb_value self, const char *prop) {
+  waah_font_t *font;
+  mrb_value retval;
+  char *name = NULL;
+  int free_name = FALSE;
+
+  Data_Get_Struct(mrb, self, &_waah_font_type_info, font);
+
+#ifdef CAIRO_HAS_FC_FONT
+  if(font->fc_pattern != NULL) {
+    if(FcPatternGetString(font->fc_pattern,
+          prop, 0, (FcChar8 **)&name) != FcResultMatch) {
+      name = NULL;
+    }
+    free_name = FALSE;
+  }
+#endif
+
+  if(name != NULL) {
+    retval = mrb_str_new_cstr(mrb, name);
+  } else {
+    retval = mrb_nil_value();
+  }
+
+  if(free_name) {
+    free(name);
+  }
+
+  return retval;
+}
+
+static mrb_value
+font_family(mrb_state *mrb, mrb_value self) {
+#ifdef CAIRO_HAS_FC_FONT
+  return font_get_prop(mrb, self, FC_FAMILY);
+#else
+  return mrb_nil_value();
+#endif
+}
+
+static mrb_value
+font_style(mrb_state *mrb, mrb_value self) {
+#ifdef CAIRO_HAS_FC_FONT
+  return font_get_prop(mrb, self, FC_STYLE);
+#else
+  return mrb_nil_value();
+#endif
+}
+
 static mrb_value
 path_initialize(mrb_state *mrb, mrb_value self) {
-  yeah_path_t *path = (yeah_path_t *) mrb_calloc(mrb, sizeof(yeah_path_t), 1);
+  waah_path_t *path = (waah_path_t *) mrb_calloc(mrb, sizeof(waah_path_t), 1);
 
   DATA_PTR(self) = path;
-  DATA_TYPE(self) = &_yeah_path_type_info;
+  DATA_TYPE(self) = &_waah_path_type_info;
 
   return self;
 }
 
 static mrb_value
 canvas_initialize(mrb_state *mrb, mrb_value self) {
-  yeah_canvas_t *canvas = (yeah_canvas_t *) mrb_calloc(mrb, sizeof(yeah_canvas_t), 1);
+  waah_canvas_t *canvas = (waah_canvas_t *) mrb_calloc(mrb, sizeof(waah_canvas_t), 1);
 
   DATA_PTR(self) = canvas;
-  DATA_TYPE(self) = &_yeah_canvas_type_info;
+  DATA_TYPE(self) = &_waah_canvas_type_info;
 
   mrb_int w, h;
   mrb_get_args(mrb, "ii", &w, &h);
@@ -472,7 +605,7 @@ canvas_color(mrb_state *mrb, mrb_value self) {
 static mrb_value
 pattern_linear(mrb_state *mrb, mrb_value self) {
 
-  yeah_pattern_t *pattern;
+  waah_pattern_t *pattern;
   mrb_float x0, y0, x1, y1;
   mrb_value mrb_pattern = pattern_new(mrb, &pattern);
 
@@ -489,7 +622,7 @@ pattern_linear(mrb_state *mrb, mrb_value self) {
 static mrb_value
 pattern_radial(mrb_state *mrb, mrb_value self) {
 
-  yeah_pattern_t *pattern;
+  waah_pattern_t *pattern;
   mrb_float cx0, cy0, radius0, cx1, cy1, radius1;
 
   mrb_value mrb_pattern = pattern_new(mrb, &pattern);
@@ -512,8 +645,8 @@ pattern_color_stop(mrb_state *mrb, mrb_value self) {
   double a = 1.0;
   mrb_value _a;
   mrb_float off;
-  yeah_pattern_t *pattern;
-  Data_Get_Struct(mrb, self, &_yeah_pattern_type_info, pattern);
+  waah_pattern_t *pattern;
+  Data_Get_Struct(mrb, self, &_waah_pattern_type_info, pattern);
 
   mrb_int n_args = mrb_get_args(mrb, "fiii|o", &off, &r, &g, &b, &_a);
 
@@ -543,11 +676,11 @@ canvas_image(mrb_state *mrb, mrb_value self) {
   CANVAS_DEFAULT_DECLS;
   mrb_value mrb_image;
   mrb_float x = 0, y = 0;
-  yeah_image_t *image;
+  waah_image_t *image;
   CANVAS_DEFAULT_DECL_INITS;
 
   mrb_get_args(mrb, "o|ff", &mrb_image, &x, &y);
-  Data_Get_Struct(mrb, mrb_image, &_yeah_image_type_info, image);
+  Data_Get_Struct(mrb, mrb_image, &_waah_image_type_info, image);
 
   cairo_set_source_surface(cr, image->surface, x, y);
 
@@ -558,11 +691,11 @@ static mrb_value
 canvas_pattern(mrb_state *mrb, mrb_value self) {
   CANVAS_DEFAULT_DECLS;
   mrb_value mrb_pattern;
-  yeah_pattern_t *pattern;
+  waah_pattern_t *pattern;
   CANVAS_DEFAULT_DECL_INITS;
 
   mrb_get_args(mrb, "o", &mrb_pattern);
-  Data_Get_Struct(mrb, mrb_pattern, &_yeah_pattern_type_info, pattern);
+  Data_Get_Struct(mrb, mrb_pattern, &_waah_pattern_type_info, pattern);
 
   cairo_set_source(cr, pattern->cr_pattern);
 
@@ -682,8 +815,8 @@ canvas_font(mrb_state *mrb, mrb_value self) {
 
   switch (mrb_type(mrb_font)) {
     case MRB_TT_DATA: {
-      yeah_font_t *font;
-      Data_Get_Struct(mrb, mrb_font, &_yeah_font_type_info, font);
+      waah_font_t *font;
+      Data_Get_Struct(mrb, mrb_font, &_waah_font_type_info, font);
       if(font->cr_face == NULL) {
         font->cr_face = cairo_ft_font_face_create_for_ft_face(font->ft_face, 0);
       }
@@ -1023,7 +1156,7 @@ static mrb_value
 canvas_snapshot(mrb_state *mrb, mrb_value self) {
   CANVAS_DEFAULT_DECLS;
   mrb_value mrb_image;
-  yeah_image_t *image;
+  waah_image_t *image;
   cairo_t *image_cr;
   CANVAS_DEFAULT_DECL_INITS;
 
@@ -1057,11 +1190,11 @@ canvas_height(mrb_state *mrb, mrb_value self) {
 
 static mrb_value
 image_to_png(mrb_state *mrb, mrb_value self) {
-  yeah_image_t *image;
+  waah_image_t *image;
   cairo_status_t status;
   mrb_value retval;
   char *filename;
-  Data_Get_Struct(mrb, self, &_yeah_image_type_info, image);
+  Data_Get_Struct(mrb, self, &_waah_image_type_info, image);
 
   if(image->surface == NULL) {
     return mrb_nil_value();
@@ -1089,40 +1222,40 @@ image_to_png(mrb_state *mrb, mrb_value self) {
 
 static mrb_value
 image_width(mrb_state *mrb, mrb_value self) {
-  yeah_image_t *image;
-  Data_Get_Struct(mrb, self, &_yeah_image_type_info, image);
+  waah_image_t *image;
+  Data_Get_Struct(mrb, self, &_waah_image_type_info, image);
 
   return mrb_fixnum_value(cairo_image_surface_get_width(image->surface));
 }
 
 static mrb_value
 image_height(mrb_state *mrb, mrb_value self) {
-  yeah_image_t *image;
-  Data_Get_Struct(mrb, self, &_yeah_image_type_info, image);
+  waah_image_t *image;
+  Data_Get_Struct(mrb, self, &_waah_image_type_info, image);
 
   return mrb_fixnum_value(cairo_image_surface_get_height(image->surface));
 }
 
 void
-mrb_mruby_yeah_canvas_gem_init(mrb_state *mrb) {
+mrb_mruby_waah_canvas_gem_init(mrb_state *mrb) {
 
   FT_Init_FreeType(&ft_lib);
 
-  mYeah = mrb_define_module(mrb, "Yeah");
+  mWaah = mrb_define_module(mrb, "Waah");
 
-  cCanvas = mrb_define_class_under(mrb, mYeah, "Canvas", mrb->object_class);
+  cCanvas = mrb_define_class_under(mrb, mWaah, "Canvas", mrb->object_class);
   MRB_SET_INSTANCE_TT(cCanvas, MRB_TT_DATA);
 
-  cFont = mrb_define_class_under(mrb, mYeah, "Font", mrb->object_class);
+  cFont = mrb_define_class_under(mrb, mWaah, "Font", mrb->object_class);
   MRB_SET_INSTANCE_TT(cFont, MRB_TT_DATA);
 
-  cImage = mrb_define_class_under(mrb, mYeah, "Image", mrb->object_class);
+  cImage = mrb_define_class_under(mrb, mWaah, "Image", mrb->object_class);
   MRB_SET_INSTANCE_TT(cImage, MRB_TT_DATA);
 
-  cPattern = mrb_define_class_under(mrb, mYeah, "Pattern", mrb->object_class);
+  cPattern = mrb_define_class_under(mrb, mWaah, "Pattern", mrb->object_class);
   MRB_SET_INSTANCE_TT(cPattern, MRB_TT_DATA);
 
-  cPath = mrb_define_class_under(mrb, mYeah, "Path", mrb->object_class);
+  cPath = mrb_define_class_under(mrb, mWaah, "Path", mrb->object_class);
   MRB_SET_INSTANCE_TT(cPath, MRB_TT_DATA);
 
 
@@ -1163,8 +1296,12 @@ mrb_mruby_yeah_canvas_gem_init(mrb_state *mrb) {
   mrb_define_method(mrb, cImage, "height", image_height, ARGS_NONE());
 
   mrb_define_class_method(mrb, cFont, "load", font_load, ARGS_REQ(1));
+  mrb_define_class_method(mrb, cFont, "find", font_find, ARGS_REQ(1));
+  mrb_define_class_method(mrb, cFont, "list", font_list, ARGS_NONE());
   mrb_undef_class_method(mrb, cFont, "new");
   mrb_define_method(mrb, cFont, "name", font_name, ARGS_NONE());
+  mrb_define_method(mrb, cFont, "family", font_family, ARGS_NONE());
+  mrb_define_method(mrb, cFont, "style", font_style, ARGS_NONE());
 
   mrb_define_method(mrb, cPath, "initialize", path_initialize, ARGS_NONE());
 
@@ -1201,7 +1338,7 @@ mrb_mruby_yeah_canvas_gem_init(mrb_state *mrb) {
 }
 
 void
-mrb_mruby_yeah_canvas_gem_final(mrb_state* mrb) {
+mrb_mruby_waah_canvas_gem_final(mrb_state* mrb) {
   //FT_Done_FreeType(ft_lib);
   /* finalizer */
 }
