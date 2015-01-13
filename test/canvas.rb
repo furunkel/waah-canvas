@@ -44,6 +44,29 @@ assert('Canvas simple test') do
   c.snapshot.to_png "../../test/test1.png"
 end
 
+assert('Canvas#pattern') do
+  c = Yeah::Canvas.new 256, 256
+
+  linear_gradient = Yeah::Pattern.linear 0.0, 0.0,  0.0, 256.0
+  linear_gradient.color_stop 1, 0, 0, 0
+  linear_gradient.color_stop 0, 0xff, 0xff, 0
+
+  radial_gradient = Yeah::Pattern.radial 115.2, 102.4, 25.6, 102.4,  102.4, 128.0
+  radial_gradient.color_stop 0, 0xff, 0xff, 0xff
+  radial_gradient.color_stop 1, 1, 1, 1
+
+  c.rect 0, 0, 256, 256
+  c.pattern linear_gradient
+  c.fill
+
+  c.circle 128.0, 128.0, 76.8
+
+  c.pattern radial_gradient
+  c.fill
+
+  c.snapshot.to_png "../../test/test_patterns.png"
+end
+
 assert('Canvas#width') do
   c = Yeah::Canvas.new 123, 456
   assert_equal c.width, 123

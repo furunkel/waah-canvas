@@ -43,6 +43,8 @@ struct RClass *mYeah;
 struct RClass *cCanvas;
 struct RClass *cImage;
 struct RClass *cFont;
+struct RClass *cPath;
+struct RClass *cPattern;
 
 static FT_Library ft_lib;
 
@@ -91,6 +93,26 @@ font_free(mrb_state *mrb, void *ptr) {
   mrb_free(mrb, ptr);
 }
 
+static void
+pattern_free(mrb_state *mrb, void *ptr) {
+  yeah_pattern_t *pattern = (yeah_pattern_t *) ptr;
+
+  if(pattern->cr_pattern != NULL) {
+    cairo_pattern_destroy(pattern->cr_pattern);
+  }
+  mrb_free(mrb, ptr);
+}
+
+static void
+path_free(mrb_state *mrb, void *ptr) {
+  yeah_path_t *path = (yeah_path_t *) ptr;
+
+  if(path->cr_path != NULL) {
+    cairo_path_destroy(path->cr_path);
+  }
+  mrb_free(mrb, ptr);
+}
+
 
 #define CANVAS_DEFAULT_DECLS \
   yeah_canvas_t *canvas;\
@@ -106,6 +128,8 @@ font_free(mrb_state *mrb, void *ptr) {
 struct mrb_data_type _yeah_canvas_type_info = {"Canvas", canvas_free};
 struct mrb_data_type _yeah_image_type_info = {"Image", image_free};
 struct mrb_data_type _yeah_font_type_info = {"Font", font_free};
+struct mrb_data_type _yeah_pattern_type_info = {"Pattern", pattern_free};
+struct mrb_data_type _yeah_path_type_info = {"Path", path_free};
 
 static int raise_cairo_status(mrb_state *mrb, cairo_status_t status) {
   switch(status) {
@@ -157,6 +181,20 @@ font_new(mrb_state *mrb, yeah_font_t **rfont) {
   return mrb_font;
 }
 
+static mrb_value
+pattern_new(mrb_state *mrb, yeah_pattern_t **rpattern) {
+  yeah_pattern_t *pattern = (yeah_pattern_t *) mrb_calloc(mrb, sizeof(yeah_pattern_t), 1);
+  mrb_value mrb_pattern = mrb_class_new_instance(mrb, 0, NULL, cPattern);
+
+  DATA_PTR(mrb_pattern) = pattern;
+  DATA_TYPE(mrb_pattern) = &_yeah_pattern_type_info;
+
+  if(*rpattern != NULL)  *rpattern = pattern;
+
+  return mrb_pattern;
+}
+
+
 
 static cairo_status_t
 read_png_from_buffer (void *closure,
@@ -167,12 +205,12 @@ read_png_from_buffer (void *closure,
   if(buf->off < buf->len) {
     size_t l = MIN(length, buf->len - buf->off);
     memcpy(data, buf->data + buf->off, l);
-    buf->off += l; 
+    buf->off += l;
   }
   return CAIRO_STATUS_SUCCESS;
 }
 
-int 
+int
 _yeah_load_png_from_buffer(mrb_state *mrb, yeah_image_t *image, unsigned char *data, size_t len) {
   struct yeah_img_buf buf = {.data = data, .len = len, .off = 0};
   image->surface = cairo_image_surface_create_from_png_stream(read_png_from_buffer, &buf);
@@ -419,21 +457,106 @@ canvas_color(mrb_state *mrb, mrb_value self) {
   return self;
 }
 
+
 static mrb_value
-canvas_image(mrb_state *mrb, mrb_value self) {
-  CANVAS_DEFAULT_DECLS;
-  mrb_value mrb_image;
-  yeah_image_t *image;
-  CANVAS_DEFAULT_DECL_INITS;
+pattern_linear(mrb_state *mrb, mrb_value self) {
 
-  mrb_get_args(mrb, "o", &mrb_image);
-  Data_Get_Struct(mrb, mrb_image, &_yeah_image_type_info, image);
+  yeah_pattern_t *pattern;
+  mrb_float x0, y0, x1, y1;
+  mrb_value mrb_pattern = pattern_new(mrb, &pattern);
 
-  cairo_set_source_surface(cr, image->surface, 0, 0);
+  mrb_get_args(mrb, "ffff", &x0, &y0, &x1, &y1);
+
+  pattern->cr_pattern  = cairo_pattern_create_linear(x0,
+                                                     y0,
+                                                     x1,
+                                                     y1);
+
+  return mrb_pattern;
+}
+
+static mrb_value
+pattern_radial(mrb_state *mrb, mrb_value self) {
+
+  yeah_pattern_t *pattern;
+  mrb_float cx0, cy0, radius0, cx1, cy1, radius1;
+
+  mrb_value mrb_pattern = pattern_new(mrb, &pattern);
+
+  mrb_get_args(mrb, "ffffff", &cx0, &cy0, &radius0, &cx1, &cy1, &radius1);
+
+  pattern->cr_pattern  = cairo_pattern_create_radial(cx0,
+                                                     cy0,
+                                                     radius0,
+                                                     cx1,
+                                                     cy1,
+                                                     radius1);
+
+  return mrb_pattern;
+}
+
+static mrb_value
+pattern_color_stop(mrb_state *mrb, mrb_value self) {
+  mrb_int r, g, b;
+  double a = 1.0;
+  mrb_value _a;
+  mrb_float off;
+  yeah_pattern_t *pattern;
+  Data_Get_Struct(mrb, self, &_yeah_pattern_type_info, pattern);
+
+  mrb_int n_args = mrb_get_args(mrb, "fiii|o", &off, &r, &g, &b, &_a);
+
+  if(n_args > 4) {
+    switch (mrb_type(_a)) {
+        case MRB_TT_FIXNUM:
+          a = (double)mrb_fixnum(_a) / 255.0;
+          break;
+        case MRB_TT_FLOAT:
+          a = mrb_float(_a);
+          break;
+        default:
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid alpha argument");
+          return self;
+    }
+  }
+
+  cairo_pattern_add_color_stop_rgba(pattern->cr_pattern,
+                                    off, (double)r / 255.0,
+                                    (double)g / 255.0, (double)b / 255.0, a);
 
   return self;
 }
 
+static mrb_value
+canvas_image(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_value mrb_image;
+  mrb_float x = 0, y = 0;
+  yeah_image_t *image;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "o|ff", &mrb_image, &x, &y);
+  Data_Get_Struct(mrb, mrb_image, &_yeah_image_type_info, image);
+
+  cairo_set_source_surface(cr, image->surface, x, y);
+
+  return self;
+}
+
+static mrb_value
+canvas_pattern(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_value mrb_pattern;
+  yeah_pattern_t *pattern;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "o", &mrb_pattern);
+  Data_Get_Struct(mrb, mrb_pattern, &_yeah_pattern_type_info, pattern);
+
+  cairo_set_source(cr, pattern->cr_pattern);
+
+  return self;
+}
 
 static void
 _cairo_ellipse(cairo_t *cr, double cx, double cy, double rw, double rh) {
@@ -730,6 +853,7 @@ invalid_path_specifier:
 
 }
 
+
 static mrb_value
 canvas_fill(mrb_state *mrb, mrb_value self) {
   CANVAS_DEFAULT_DECLS;
@@ -983,10 +1107,18 @@ mrb_mruby_yeah_canvas_gem_init(mrb_state *mrb) {
   cImage = mrb_define_class_under(mrb, mYeah, "Image", mrb->object_class);
   MRB_SET_INSTANCE_TT(cImage, MRB_TT_DATA);
 
+  cPattern = mrb_define_class_under(mrb, mYeah, "Pattern", mrb->object_class);
+  MRB_SET_INSTANCE_TT(cPattern, MRB_TT_DATA);
+
+  cPath = mrb_define_class_under(mrb, mYeah, "Path", mrb->object_class);
+  MRB_SET_INSTANCE_TT(cPath, MRB_TT_DATA);
+
+
   mrb_define_method(mrb, cCanvas, "initialize", canvas_initialize, ARGS_REQ(2));
 
   mrb_define_method(mrb, cCanvas, "color", canvas_color, ARGS_REQ(3) | ARGS_OPT(1));
-  mrb_define_method(mrb, cCanvas, "image", canvas_image, ARGS_REQ(1));
+  mrb_define_method(mrb, cCanvas, "image", canvas_image, ARGS_REQ(1) | ARGS_OPT(2));
+  mrb_define_method(mrb, cCanvas, "pattern", canvas_pattern, ARGS_REQ(1));
   mrb_define_method(mrb, cCanvas, "ellipse", canvas_ellipse, ARGS_REQ(4));
   mrb_define_method(mrb, cCanvas, "circle", canvas_circle, ARGS_REQ(3));
   mrb_define_method(mrb, cCanvas, "rect", canvas_rect, ARGS_REQ(4));
@@ -996,6 +1128,7 @@ mrb_mruby_yeah_canvas_gem_init(mrb_state *mrb) {
   mrb_define_method(mrb, cCanvas, "text", canvas_text, ARGS_REQ(3));
   mrb_define_method(mrb, cCanvas, "font_size", canvas_font_size, ARGS_REQ(1));
   mrb_define_method(mrb, cCanvas, "font", canvas_font, ARGS_REQ(1) | ARGS_OPT(2));
+
 
   mrb_define_method(mrb, cCanvas, "fill", canvas_fill, ARGS_OPT(1));
   mrb_define_method(mrb, cCanvas, "stroke", canvas_stroke, ARGS_OPT(1));
@@ -1013,14 +1146,26 @@ mrb_mruby_yeah_canvas_gem_init(mrb_state *mrb) {
 
   mrb_define_class_method(mrb, cImage, "load", image_load, ARGS_REQ(1));
   mrb_undef_class_method(mrb, cImage, "new");
+  mrb_define_method(mrb, cImage, "to_png", image_to_png, ARGS_OPT(1));
+  mrb_define_method(mrb, cImage, "width", image_width, ARGS_NONE());
+  mrb_define_method(mrb, cImage, "height", image_height, ARGS_NONE());
 
   mrb_define_class_method(mrb, cFont, "load", font_load, ARGS_REQ(1));
   mrb_undef_class_method(mrb, cFont, "new");
   mrb_define_method(mrb, cFont, "name", font_name, ARGS_NONE());
+  
+  /*
+  mrb_define_method(mrb, cPath, "initialize", path_initialize, ARGS_REQ(2));
+  mrb_define_method(mrb, cPath, "move_to", path_initialize, ARGS_REQ(2));
+  mrb_define_method(mrb, cPath, "line_to", path_initialize, ARGS_REQ(2));
+  mrb_define_method(mrb, cPath, "curve_to", path_initialize, ARGS_REQ(2));
+  mrb_define_method(mrb, cPath, "i", path_initialize, ARGS_REQ(2));
+   */
 
-  mrb_define_method(mrb, cImage, "to_png", image_to_png, ARGS_OPT(1));
-  mrb_define_method(mrb, cImage, "width", image_width, ARGS_NONE());
-  mrb_define_method(mrb, cImage, "height", image_height, ARGS_NONE());
+  mrb_define_class_method(mrb, cPattern, "linear", pattern_linear, ARGS_REQ(4));
+  mrb_define_class_method(mrb, cPattern, "radial", pattern_radial, ARGS_REQ(6));
+  mrb_undef_class_method(mrb, cPattern, "new");
+  mrb_define_method(mrb, cPattern, "color_stop", pattern_color_stop, ARGS_REQ(4) | ARGS_OPT(1));
 
   id_m = mrb_intern_lit(mrb, "m");
   id_M = mrb_intern_lit(mrb, "M");

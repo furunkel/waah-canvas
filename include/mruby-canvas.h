@@ -22,6 +22,14 @@ typedef struct yeah_font_s {
   cairo_font_face_t *cr_face;
 } yeah_font_t;
 
+typedef struct yeah_path_s {
+  cairo_path_t *cr_path;
+} yeah_path_t;
+
+typedef struct yeah_pattern_s {
+  cairo_pattern_t *cr_pattern;
+} yeah_pattern_t;
+
 
 struct yeah_img_buf {
   unsigned char *data;
