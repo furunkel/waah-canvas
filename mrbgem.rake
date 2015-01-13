@@ -1,12 +1,12 @@
 
 module ::Build
-  def build_dir
+  def self.build_dir
     File.join __dir__, 'tmp', 'build'
   end
 
-  def root_dir
+  def self.root_dir
     raise 'missing platform' unless $target_platform
-    File.join build_dir, $target_platform
+    File.join build_dir, $target_platform.to_s
   end
 end
 
@@ -34,6 +34,8 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
       if build_deps
         ENV['PKG_CONFIG_PATH'] = "#{File.join Build.root_dir, 'lib', 'pkgconfig'}"
         linker.flags_before_libraries << "-Wl,-Bstatic"
+      else
+        ENV['PKG_CONFIG_PATH'] = nil
       end
 
       case platform
@@ -66,10 +68,14 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
         ENV['CC'] = build_conf.cc.command
         ENV['LD'] = build_conf.linker.command
         ENV['PKG_CONFIG_PATH'] = "#{File.join Build.root_dir, 'lib', 'pkgconfig'}"
-        ENV['CFLAGS'] = build_conf.cc.flags.flatten.join(' ').gsub(/--sysroot=[^\s]+/, '')
+
         if platform == :android
+          ENV['CFLAGS'] = build_conf.cc.flags.flatten.join(' ').gsub(/--sysroot=[^\s]+/, '')
           ENV['CFLAGS'] += " -I#{File.join ENV['ANDROID_NDK_HOME'], 'sources', 'android', 'cpufeatures'}"
           ENV['HOST'] = 'arm-linux-androideabi'
+        elsif platform == :windows
+          ENV['CFLAGS'] = (build_conf.cc.flags.flatten + ["--sysroot=#{Build.root_dir}"]).join(' ')
+          ENV['HOST'] = 'mingw32'
         end
         ENV['LDFLAGS'] = build_conf.linker.flags.flatten.join(' ').gsub(/--sysroot=[^\s]+/, '')
         ENV['AR'] = build_conf.archiver.command
@@ -77,7 +83,7 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
         cc.flags.first.unshift "-I#{File.join(Build.root_dir, 'include')}"
 
         load File.join __dir__, 'tasks', 'build.rake'
-        Rake::Task[:build_deps].invoke
+        Rake::Task[:"build_deps_for_#{platform}"].invoke
       end
 
       build_conf.cc.include_paths.concat cc.include_paths

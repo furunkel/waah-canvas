@@ -28,8 +28,12 @@ module ::Build
     end
   end
 
+  def deps_dir
+    root_dir
+  end
+
   def dep_dir(name)
-    File.join Build.build_dir, name.to_s
+    File.join Build.deps_dir, name.to_s
   end
 
   def pixman_include_cpu_features
@@ -68,13 +72,14 @@ end
 
 directory Build.build_dir
 directory Build.root_dir
+directory Build.deps_dir
 
 DEP_TARBALLS.each do |name, _|
 
-  directory Build.dep_dir(name) => [Build.build_dir, Build.tarball(name)] do |t|
-    tarball_file = Dir["#{t.name}.tar.{bz2,xz,gz}"].first
-    sh "tar xf #{tarball_file} -C #{Build.build_dir}"
-    dirs = Dir.entries(Build.build_dir).map{|f| File.join(Build.build_dir, f)}.select{|f| File.directory? f}
+  directory Build.dep_dir(name) => [Build.deps_dir, Build.tarball(name)] do |t|
+    tarball_file = Dir["#{File.join Build.build_dir, name.to_s}.tar.{bz2,xz,gz}"].first
+    sh "tar xf #{tarball_file} -C #{Build.deps_dir}"
+    dirs = Dir.entries(Build.deps_dir).map{|f| File.join(Build.deps_dir, f)}.select{|f| File.directory? f}
     dir = dirs.grep(/#{name}/).first
     if dir.nil? && name == :libjpeg
       dir = dirs.grep(/jpeg/).first
@@ -91,7 +96,7 @@ DEP_TARBALLS.each do |name, _|
   end
 end
 
-task :build_deps => [Build.static_lib(:cairo), Build.static_lib(:libjpeg)]
+task :"build_deps_for_#{$target_platform}" => [Build.static_lib(:cairo), Build.static_lib(:libjpeg)]
 
 file Build.static_lib(:zlib) => Build.dep_dir(:zlib) do
   Dir.chdir Build.dep_dir(:zlib) do
