@@ -4,7 +4,7 @@ require 'fileutils'
 include FileUtils
 
 DEP_TARBALLS = {
-  libpng:     '  ftp://ftp.simplesystems.org/pub/libpng/png/src/libpng16/libpng-1.6.16.tar.xz',
+  libpng:        'ftp://ftp.simplesystems.org/pub/libpng/png/src/libpng16/libpng-1.6.16.tar.xz',
   freetype:      'http://download.savannah.gnu.org/releases/freetype/freetype-2.5.3.tar.bz2',
   zlib:          'http://zlib.net/zlib-1.2.8.tar.xz',
   pixman:        'http://cairographics.org/releases/pixman-0.32.6.tar.gz',
