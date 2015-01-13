@@ -49,6 +49,9 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
         linker.libraries << 'android'
         linker.libraries << 'log'
         linker.flags  << '-shared -fPIC'
+      when :windows
+        linker.libraries << 'mingw32'
+        linker.flags << '-mwindows'
       end
 
       self.pkg_config 'freetype2', build_deps
@@ -68,16 +71,17 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
         ENV['CC'] = build_conf.cc.command
         ENV['LD'] = build_conf.linker.command
         ENV['PKG_CONFIG_PATH'] = "#{File.join Build.root_dir, 'lib', 'pkgconfig'}"
+        ENV['CFLAGS'] = build_conf.cc.flags.flatten.join(' ').gsub(/--sysroot=[^\s]+/, '')
 
+        ENV['LDFLAGS'] = build_conf.linker.flags.flatten.join(' ').gsub(/--sysroot=[^\s]+/, '')
         if platform == :android
-          ENV['CFLAGS'] = build_conf.cc.flags.flatten.join(' ').gsub(/--sysroot=[^\s]+/, '')
           ENV['CFLAGS'] += " -I#{File.join ENV['ANDROID_NDK_HOME'], 'sources', 'android', 'cpufeatures'}"
           ENV['HOST'] = 'arm-linux-androideabi'
         elsif platform == :windows
-          ENV['CFLAGS'] = (build_conf.cc.flags.flatten + ["--sysroot=#{Build.root_dir}"]).join(' ')
           ENV['HOST'] = 'mingw32'
+          #ENV['LDFLAGS'] += " -L#{File.join Build.root_dir, 'lib'}"
+          #ENV['CFLAGS'] += " -I#{File.join Build.root_dir, 'include'}"
         end
-        ENV['LDFLAGS'] = build_conf.linker.flags.flatten.join(' ').gsub(/--sysroot=[^\s]+/, '')
         ENV['AR'] = build_conf.archiver.command
 
         cc.flags.first.unshift "-I#{File.join(Build.root_dir, 'include')}"
