@@ -92,9 +92,12 @@ font_free(mrb_state *mrb, void *ptr) {
   if(font->ft_face != NULL) {
     FT_Done_Face(font->ft_face);
   }
+
+#ifdef CAIRO_HAS_FC_FONT
   if(font->fc_pattern != NULL) {
     FcPatternDestroy(font->fc_pattern);
   }
+#endif
   mrb_free(mrb, ptr);
 }
 
@@ -818,7 +821,14 @@ canvas_font(mrb_state *mrb, mrb_value self) {
       waah_font_t *font;
       Data_Get_Struct(mrb, mrb_font, &_waah_font_type_info, font);
       if(font->cr_face == NULL) {
-        font->cr_face = cairo_ft_font_face_create_for_ft_face(font->ft_face, 0);
+#ifdef CAIRO_HAS_FC_FONT
+        if(font->fc_pattern != NULL) {
+          font->cr_face = cairo_ft_font_face_create_for_pattern(font->fc_pattern);
+        } else
+#endif
+          if(font->ft_face != NULL) {
+            font->cr_face = cairo_ft_font_face_create_for_ft_face(font->ft_face, 0);
+          }
       }
       cairo_set_font_face(canvas->cr, font->cr_face);
       break;
