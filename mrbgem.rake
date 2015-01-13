@@ -25,12 +25,12 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
       @platform = platform
       @build_deps = build_deps
 
+      $target_platform = platform
+
       if build_deps
         ENV['PKG_CONFIG_PATH'] = "#{File.join Build.root_dir, 'lib', 'pkgconfig'}"
         linker.flags_before_libraries << "-Wl,-Bstatic"
       end
-
-      $target_platform = platform
 
       case platform
       when :x11
