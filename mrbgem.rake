@@ -8,8 +8,8 @@ end
 load File.join __dir__, 'tasks', 'build.rake'
 load File.join __dir__, 'tasks', 'pkg_config.rake'
 
-MRuby::Gem::Specification.new('mruby-yeah-canvas') do |spec|
-  spec.license = 'GPL'
+MRuby::Gem::Specification.new('mruby-waah-canvas') do |spec|
+  spec.license = 'MPL 2.0'
   spec.author  = 'furunkel'
 
   spec.add_dependency  'mruby-string-utf8', core: 'mruby-string-utf8'
