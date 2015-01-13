@@ -30,6 +30,8 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
         linker.flags_before_libraries << "-Wl,-Bstatic"
       end
 
+      $target_platform = platform
+
       case platform
       when :x11
         self.pkg_config 'x11'

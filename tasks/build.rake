@@ -18,7 +18,8 @@ DEP_TARBALLS = {
 module ::Build
 
   def root_dir
-    File.join tmp_dir, "root"
+    raise 'missing platform' unless $target_platform
+    File.join tmp_dir, $target_platform
   end
 
   def tarball(name)
