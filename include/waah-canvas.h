@@ -49,3 +49,6 @@ _waah_load_jpeg_from_file(mrb_state *mrb, waah_image_t *image, FILE *file);
 
 int
 _waah_load_png_from_buffer(mrb_state *mrb, waah_image_t *image, unsigned char *data, size_t len);
+
+int
+_waah_font_load_from_buffer(mrb_state *mrb, waah_font_t *font, unsigned char *data, size_t len);

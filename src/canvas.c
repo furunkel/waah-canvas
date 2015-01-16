@@ -176,7 +176,7 @@ image_new(mrb_state *mrb, waah_image_t **rimage) {
   return mrb_image;
 }
 
-static mrb_value
+mrb_value
 font_new(mrb_state *mrb, waah_font_t **rfont) {
   waah_font_t *font = (waah_font_t *) mrb_calloc(mrb, sizeof(waah_font_t), 1);
   mrb_value mrb_font = mrb_class_new_instance(mrb, 0, NULL, cFont);
@@ -358,27 +358,19 @@ image_load(mrb_state *mrb, mrb_value self) {
   return _waah_image_load(mrb, self, load_png, load_jpeg);
 }
 
-mrb_value
-_waah_font_load_from_filename(mrb_state *mrb, mrb_value self, const char *filename) {
-
-  waah_font_t *font;
-  mrb_value mrb_font = font_new(mrb, &font);
-
+int
+_waah_font_load_from_filename(mrb_state *mrb, waah_font_t *font, const char *filename) {
   if(FT_New_Face(ft_lib,
                  filename,
                  0,
                  &font->ft_face) != FT_Err_Ok) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "font loading failed");
-    return mrb_nil_value();
+    return FALSE;
   }
-  return mrb_font;
+  return TRUE;
 }
 
-mrb_value
-_waah_font_load_from_buffer(mrb_state *mrb, mrb_value self, unsigned char *buf, size_t len) {
-
-  waah_font_t *font;
-  mrb_value mrb_font = font_new(mrb, &font);
+int
+_waah_font_load_from_buffer(mrb_state *mrb, waah_font_t *font, unsigned char *buf, size_t len) {
   FT_Open_Args args;
 
   args.flags = FT_OPEN_MEMORY;
@@ -388,19 +380,25 @@ _waah_font_load_from_buffer(mrb_state *mrb, mrb_value self, unsigned char *buf, 
                   &args,
                   0,
                   &font->ft_face) != FT_Err_Ok) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "font loading failed");
-    return mrb_nil_value();
+    return FALSE;
   }
-  return mrb_font;
+  return TRUE;
 }
 
 static mrb_value
 font_load(mrb_state *mrb, mrb_value self) {
   char *filename;
+  waah_font_t *font;
+  mrb_value mrb_font = font_new(mrb, &font);
   mrb_int len;
   mrb_get_args(mrb, "s", &filename, &len);
 
-  return _waah_font_load_from_filename(mrb, self, filename);
+  if(!_waah_font_load_from_filename(mrb, font, filename)) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "font loading failed");
+    return mrb_nil_value();
+  } else {
+    return mrb_font;
+  }
 }
 
 
