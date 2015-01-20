@@ -15,7 +15,6 @@ load File.join __dir__, 'tasks', 'pkg_config.rake'
 MRuby::Gem::Specification.new('waah-canvas') do |spec|
   spec.license = 'MPL 2.0'
   spec.author  = 'furunkel'
-
   spec.add_dependency  'mruby-string-utf8', core: 'mruby-string-utf8'
 
   class << self
@@ -25,7 +24,7 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
       self.objs.concat files.map{ |f| objfile(f.relative_path_from(dir).pathmap("#{build_dir}/%X")) }
     end
 
-    def configure(build_conf, platform, build_deps)
+    def configure(build_conf, platform, build_deps, include_app_deps = true)
       @platform = platform
       @build_deps = build_deps
 
@@ -40,9 +39,11 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
 
       case platform
       when :x11
-        self.pkg_config 'x11'
-        self.pkg_config 'xrender'
-        self.pkg_config 'xext'
+        if include_app_deps
+          self.pkg_config 'x11'
+          self.pkg_config 'xrender'
+          self.pkg_config 'xext'
+        end
         self.pkg_config 'fontconfig'
       when :android
         cc.include_paths << File.join(ENV['ANDROID_NDK_HOME'], 'sources', 'android')
@@ -52,6 +53,8 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
       when :windows
         linker.libraries << 'mingw32'
         linker.flags << '-mwindows'
+      else
+        raise "Invalid platform #{platform}"
       end
 
       self.pkg_config 'freetype2', build_deps
@@ -79,6 +82,7 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
           ENV['HOST'] = 'arm-linux-androideabi'
         elsif platform == :windows
           ENV['HOST'] = 'mingw32'
+          ENV['RANLIB'] = "#{File.join ENV['MINGW_TOOLCHAIN'], 'bin', ENV['MINGW_TOOLCHAIN_PREFIX']}-ranlib"
           #ENV['LDFLAGS'] += " -L#{File.join Build.root_dir, 'lib'}"
           #ENV['CFLAGS'] += " -I#{File.join Build.root_dir, 'include'}"
         end
@@ -88,10 +92,10 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
 
         load File.join __dir__, 'tasks', 'build.rake'
         Rake::Task[:"build_deps_for_#{platform}"].invoke
+      else
+        ENV['CC'] = nil
+        ENV['LD'] = nil
       end
-
-      build_conf.cc.include_paths.concat cc.include_paths
-      build_conf.cc.defines.concat cc.defines
     end
   end
 
@@ -102,5 +106,4 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
 
   spec.cc.include_paths << "#{dir}/include/"
   spec.export_include_paths << "#{dir}/include/"
-
 end

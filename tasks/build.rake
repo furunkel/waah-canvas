@@ -77,6 +77,8 @@ directory Build.deps_dir
 DEP_TARBALLS.each do |name, _|
 
   directory Build.dep_dir(name) => [Build.deps_dir, Build.tarball(name)] do |t|
+    next if File.exists? t.name
+
     tarball_file = Dir["#{File.join Build.build_dir, name.to_s}.tar.{bz2,xz,gz}"].first
     sh "tar xf #{tarball_file} -C #{Build.deps_dir}"
     dirs = Dir.entries(Build.deps_dir).map{|f| File.join(Build.deps_dir, f)}.select{|f| File.directory? f}

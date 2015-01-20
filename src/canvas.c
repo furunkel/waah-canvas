@@ -808,11 +808,12 @@ canvas_font(mrb_state *mrb, mrb_value self) {
   CANVAS_DEFAULT_DECLS;
   mrb_value mrb_font;
   mrb_sym sym_slant, sym_weight;
+  int n_args;
   cairo_font_slant_t slant = CAIRO_FONT_SLANT_NORMAL;
   cairo_font_weight_t weight = CAIRO_FONT_WEIGHT_NORMAL;
   CANVAS_DEFAULT_DECL_INITS;
 
-  mrb_get_args(mrb, "o|nn", &mrb_font, &sym_weight, &sym_slant);
+  n_args = mrb_get_args(mrb, "o|nn", &mrb_font, &sym_weight, &sym_slant);
 
   switch (mrb_type(mrb_font)) {
     case MRB_TT_DATA: {
@@ -836,7 +837,11 @@ canvas_font(mrb_state *mrb, mrb_value self) {
       if(sym_slant == id_italic) slant = CAIRO_FONT_SLANT_ITALIC;
       else if(sym_slant == id_oblique) slant = CAIRO_FONT_SLANT_OBLIQUE;
 
-      if(sym_weight == id_bold) weight = CAIRO_FONT_WEIGHT_BOLD;
+      if(sym_weight == id_bold) {
+        weight = CAIRO_FONT_WEIGHT_BOLD;
+      } else if(n_args == 2 && sym_weight == id_italic) {
+        slant = CAIRO_FONT_SLANT_ITALIC;
+      }
       cairo_select_font_face(canvas->cr, font_name, slant, weight);
       break;
     }
