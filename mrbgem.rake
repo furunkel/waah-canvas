@@ -53,6 +53,7 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
       when :windows
         linker.libraries << 'mingw32'
         linker.flags << '-mwindows'
+      when :linuxfb
       else
         raise "Invalid platform #{platform}"
       end
