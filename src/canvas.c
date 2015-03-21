@@ -171,7 +171,7 @@ image_new(mrb_state *mrb, waah_image_t **rimage) {
   DATA_PTR(mrb_image) = image;
   DATA_TYPE(mrb_image) = &_waah_image_type_info;
 
-  if(rimage != NULL)  *rimage = image;
+  *rimage = image;
 
   return mrb_image;
 }
@@ -184,7 +184,7 @@ font_new(mrb_state *mrb, waah_font_t **rfont) {
   DATA_PTR(mrb_font) = font;
   DATA_TYPE(mrb_font) = &_waah_font_type_info;
 
-  if(*rfont != NULL)  *rfont = font;
+  *rfont = font;
 
   return mrb_font;
 }
@@ -197,7 +197,7 @@ pattern_new(mrb_state *mrb, waah_pattern_t **rpattern) {
   DATA_PTR(mrb_pattern) = pattern;
   DATA_TYPE(mrb_pattern) = &_waah_pattern_type_info;
 
-  if(*rpattern != NULL)  *rpattern = pattern;
+  *rpattern = pattern;
 
   return mrb_pattern;
 }
