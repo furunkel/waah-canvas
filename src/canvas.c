@@ -171,7 +171,7 @@ image_new(mrb_state *mrb, waah_image_t **rimage) {
   DATA_PTR(mrb_image) = image;
   DATA_TYPE(mrb_image) = &_waah_image_type_info;
 
-  if(*rimage != NULL)  *rimage = image;
+  if(rimage != NULL)  *rimage = image;
 
   return mrb_image;
 }
