@@ -1,4 +1,10 @@
 
+unless defined? __dir__
+  def __dir__
+    File.expand_path(File.dirname(__FILE__))
+  end
+end
+
 module ::Build
   def self.build_dir
     File.join __dir__, 'tmp', 'build'
