@@ -97,6 +97,10 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
         ENV['CC'] = nil
         ENV['LD'] = nil
       end
+
+      # Why is this necessary ?
+      build_conf.cc.include_paths.concat cc.include_paths
+      build_conf.cc.defines.concat       cc.defines
     end
   end
 
