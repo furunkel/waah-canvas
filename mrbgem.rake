@@ -60,6 +60,7 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
         linker.libraries << 'mingw32'
         linker.flags << '-mwindows'
       when :linuxfb
+        self.pkg_config 'fontconfig'
       else
         raise "Invalid platform #{platform}"
       end
