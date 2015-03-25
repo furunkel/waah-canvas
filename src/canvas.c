@@ -290,6 +290,9 @@ _waah_load_jpeg_from_file(mrb_state *mrb, waah_image_t *image, FILE *file) {
 
   }
 
+  mrb_free(mrb, row_buffer[0]);
+  mrb_free(mrb, row_buffer);
+
   image->surface = cairo_image_surface_create_for_data(image->data, CAIRO_FORMAT_RGB24, w, h, stride);
 
   jpeg_finish_decompress(&info);
