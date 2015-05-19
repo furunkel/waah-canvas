@@ -18,21 +18,6 @@
 #include <cairo.h>
 #include <cairo/cairo-ft.h>
 
-static mrb_sym id_m;
-static mrb_sym id_M;
-static mrb_sym id_Z;
-static mrb_sym id_z;
-static mrb_sym id_Z;
-static mrb_sym id_l;
-static mrb_sym id_L;
-static mrb_sym id_H;
-static mrb_sym id_h;
-static mrb_sym id_V;
-static mrb_sym id_v;
-static mrb_sym id_C;
-static mrb_sym id_c;
-static mrb_sym id_A;
-static mrb_sym id_a;
 static mrb_sym id_instance_eval;
 static mrb_sym id_normal;
 static mrb_sym id_italic;
@@ -893,127 +878,212 @@ leave:
 static mrb_value
 canvas_path(mrb_state *mrb, mrb_value self) {
   CANVAS_DEFAULT_DECLS;
-  mrb_value *argv;
-  mrb_int argc;
-#define MAX_ARGS 6
-  double args[MAX_ARGS];
-  int i = 0;
-
+  mrb_value blk, path;
   CANVAS_DEFAULT_DECL_INITS;
 
-  cairo_new_path(cr);
-
-  mrb_get_args(mrb, "*", &argv, &argc);
-
-  while(i < argc) {
-    mrb_value v = argv[i];
-    int argc;
-
-    if(mrb_type(v) == MRB_TT_SYMBOL) {
-      mrb_sym command = mrb_symbol(v);
-      if(command == id_m) {
-        double cx, cy;
-        argc = _load_path_args(mrb, argv, i, args, 2);
-        if(argc < 2) goto invalid_path_args;
-        cairo_get_current_point(cr, &cx, &cy);
-        cairo_move_to(cr, cx + args[0], cy + args[1]);
-      } else if(command == id_M) {
-        argc = _load_path_args(mrb, argv, i, args, 2);
-        if(argc < 2) goto invalid_path_args;
-        cairo_move_to(cr,  args[0], args[1]);
-      } else if(command == id_z || command == id_Z) {
-        argc = 0;
-        cairo_close_path(cr);
-      } else if(command == id_l) {
-        argc = _load_path_args(mrb, argv, i, args, 2);
-        if(argc < 2) goto invalid_path_args;
-        cairo_rel_line_to(cr,  args[0], args[1]);
-      } else if(command == id_L) {
-        argc = _load_path_args(mrb, argv, i, args, 2);
-        if(argc < 2) goto invalid_path_args;
-        cairo_line_to(cr,  args[0], args[1]);
-      } else if(command == id_h) {
-        argc = _load_path_args(mrb, argv, i, args, 1);
-        if(argc < 1) goto invalid_path_args;
-        cairo_rel_line_to(cr, args[0], 0);
-      } else if(command == id_H) {
-        double cx, cy;
-        argc = _load_path_args(mrb, argv, i, args, 1);
-        if(argc < 1) goto invalid_path_args;
-        cairo_get_current_point(cr, &cx, &cy);
-        cairo_line_to(cr, args[0], cy);
-      } else if(command == id_V) {
-        double cx, cy;
-        argc = _load_path_args(mrb, argv, i, args, 1);
-        if(argc < 1) goto invalid_path_args;
-        cairo_get_current_point(cr, &cx, &cy);
-        cairo_line_to(cr, cx, args[0]);
-      } else if(command == id_v) {
-        argc = _load_path_args(mrb, argv, i, args, 1);
-        if(argc < 1) goto invalid_path_args;
-        cairo_rel_line_to(cr, 0, args[0]);
-      } else if(command == id_c || command == id_C) {
-        argc = _load_path_args(mrb, argv, i, args, 6);
-        if(argc < 6) goto invalid_path_args;
-        if(command == id_c) {
-          cairo_rel_curve_to(cr, args[0], args[1], args[2], args[3], args[4], args[5]);
-        } else {
-          cairo_curve_to(cr, args[0], args[1], args[2], args[3], args[4], args[5]);
-        }
-      } else if(command == id_a || command == id_A) {
-        double ax, ay;
-        argc = _load_path_args(mrb, argv, i, args, 6);
-        if(argc < 5) goto invalid_path_args;
-
-        if(command == id_A) {
-          ax = args[0];
-          ay = args[1];
-        } else {
-          double cx, cy;
-          cairo_get_current_point(cr, &cx, &cy);
-          ax = cx + args[0];
-          ay = cy + args[1];
-        }
-
-        if(argc > 5 && args[5] > 0) {
-          cairo_arc_negative(cr,
-                              ax,
-                              ay,
-                              args[2],
-                              args[3],
-                              args[4]);
-        } else {
-          cairo_arc(cr,
-                    ax,
-                    ay,
-                    args[2],
-                    args[3],
-                    args[4]);
-        }
-      } else {
-        goto invalid_path_specifier;
-      }
-    } else {
-      goto invalid_path_args;
-    }
-
-    i += argc + 1;
+  if(mrb_get_args(mrb, "|o", &path) == 1) {
   }
 
-#undef MAX_ARGS
   return self;
-
-invalid_path_args:
-  mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid path arguments");
-  return self;
-
-
-invalid_path_specifier:
-  mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid path specifier");
-  return self;
-
 }
 
+static mrb_value
+canvas_m(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  double cx, cy, x, y;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "ff", &x, &y);
+
+  cairo_get_current_point(cr, &cx, &cy);
+  cairo_move_to(cr, cx + x, cy + y);
+
+  return self;
+}
+
+static mrb_value
+canvas_m_bang(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  double x, y;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "ff", &x, &y);
+  cairo_move_to(cr, x, y);
+
+  return self;
+}
+
+static mrb_value
+canvas_l(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  double x, y;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "ff", &x, &y);
+  cairo_rel_line_to(cr, x, y);
+
+  return self;
+}
+
+static mrb_value
+canvas_l_bang(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  double x, y;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "ff", &x, &y);
+  cairo_line_to(cr, x, y);
+
+  return self;
+}
+
+static mrb_value
+canvas_h(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  double x;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "f", &x);
+
+  cairo_rel_line_to(cr, x, 0);
+  return self;
+}
+
+static mrb_value
+canvas_h_bang(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  double x, cx, cy;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "f", &x);
+
+  cairo_get_current_point(cr, &cx, &cy);
+  cairo_line_to(cr, x, cy);
+  return self;
+}
+
+static mrb_value
+canvas_v(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  double y;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "f", &y);
+
+  cairo_rel_line_to(cr, 0, y);
+  return self;
+}
+
+static mrb_value
+canvas_v_bang(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  double y, cx, cy;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "f", &y);
+
+  cairo_get_current_point(cr, &cx, &cy);
+  cairo_line_to(cr, cx, y);
+  return self;
+}
+
+static mrb_value
+canvas_c(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  double a, b, c, d, e, f;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "ffffff", &a, &b, &c, &d, &e, &f);
+
+  cairo_rel_curve_to(cr, a, b, c, d, e, f);
+  return self;
+}
+
+static mrb_value
+canvas_c_bang(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  double a, b, c, d, e, f;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "ffffff", &a, &b, &c, &d, &e, &f);
+
+  cairo_curve_to(cr, a, b, c, d, e, f);
+  return self;
+}
+
+static mrb_value
+canvas_a(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  double a, b, c, d, e, f;
+  double cx, cy, x, y;
+  int argc;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  argc = mrb_get_args(mrb, "fffff|f", &a, &b, &c, &d, &e, &f);
+
+
+  cairo_get_current_point(cr, &cx, &cy);
+  x = cx + a;
+  y = cy + b;
+
+  if(argc > 5 && f > 0) {
+    cairo_arc_negative(cr,
+                       x,
+                       y,
+                       c,
+                       d,
+                       e);
+  } else {
+    cairo_arc(cr,
+              x,
+              y,
+              c,
+              d,
+              e);
+  }
+  return self;
+}
+
+static mrb_value
+canvas_a_bang(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  double a, b, c, d, e;
+  mrb_bool neg = FALSE;
+  double cx, cy, x, y;
+  int argc;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  argc = mrb_get_args(mrb, "fffff|b", &a, &b, &c, &d, &e, &neg);
+
+  x = a;
+  y = b;
+
+  if(argc > 5 && neg) {
+    cairo_arc_negative(cr,
+                       x,
+                       y,
+                       c,
+                       d,
+                       e);
+  } else {
+    cairo_arc(cr,
+              x,
+              y,
+              c,
+              d,
+              e);
+  }
+  return self;
+}
+
+static mrb_value
+canvas_z(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  cairo_close_path(cr);
+  return self;
+}
 
 static mrb_value
 canvas_fill(mrb_state *mrb, mrb_value self) {
@@ -1285,7 +1355,21 @@ mrb_waah_canvas_gem_init(mrb_state *mrb) {
   mrb_define_method(mrb, cCanvas, "rect", canvas_rect, ARGS_REQ(4));
   mrb_alias_method(mrb, cCanvas, mrb_intern_cstr(mrb, "rectangle"), mrb_intern_cstr(mrb, "rect"));
   mrb_define_method(mrb, cCanvas, "rounded_rect", canvas_rounded_rect, ARGS_REQ(5));
-  mrb_define_method(mrb, cCanvas, "path", canvas_path, ARGS_ANY());
+  mrb_define_method(mrb, cCanvas, "path", canvas_path, ARGS_OPT(1));
+  mrb_define_method(mrb, cCanvas, "z", canvas_z, ARGS_NONE());
+  mrb_define_method(mrb, cCanvas, "m", canvas_m, ARGS_REQ(2));
+  mrb_define_method(mrb, cCanvas, "m!", canvas_m_bang, ARGS_REQ(2));
+  mrb_define_method(mrb, cCanvas, "l", canvas_l, ARGS_REQ(2));
+  mrb_define_method(mrb, cCanvas, "l!", canvas_l_bang, ARGS_REQ(2));
+  mrb_define_method(mrb, cCanvas, "h", canvas_h, ARGS_REQ(1));
+  mrb_define_method(mrb, cCanvas, "h!", canvas_h_bang, ARGS_REQ(1));
+  mrb_define_method(mrb, cCanvas, "v", canvas_v, ARGS_REQ(1));
+  mrb_define_method(mrb, cCanvas, "v!", canvas_v_bang, ARGS_REQ(1));
+  mrb_define_method(mrb, cCanvas, "c", canvas_c, ARGS_REQ(6));
+  mrb_define_method(mrb, cCanvas, "c!", canvas_c_bang, ARGS_REQ(6));
+  mrb_define_method(mrb, cCanvas, "a", canvas_a, ARGS_REQ(5)| ARGS_OPT(1));
+  mrb_define_method(mrb, cCanvas, "a!", canvas_a_bang, ARGS_REQ(5) | ARGS_OPT(1));
+
   mrb_define_method(mrb, cCanvas, "text", canvas_text, ARGS_REQ(3));
   mrb_define_method(mrb, cCanvas, "font_size", canvas_font_size, ARGS_REQ(1));
   mrb_define_method(mrb, cCanvas, "font", canvas_font, ARGS_REQ(1) | ARGS_OPT(2));
@@ -1332,20 +1416,6 @@ mrb_waah_canvas_gem_init(mrb_state *mrb) {
   mrb_undef_class_method(mrb, cPattern, "new");
   mrb_define_method(mrb, cPattern, "color_stop", pattern_color_stop, ARGS_REQ(4) | ARGS_OPT(1));
 
-  id_m = mrb_intern_lit(mrb, "m");
-  id_M = mrb_intern_lit(mrb, "M");
-  id_Z = mrb_intern_lit(mrb, "Z");
-  id_z = mrb_intern_lit(mrb, "z");
-  id_l = mrb_intern_lit(mrb, "l");
-  id_L = mrb_intern_lit(mrb, "L");
-  id_H = mrb_intern_lit(mrb, "H");
-  id_h = mrb_intern_lit(mrb, "h");
-  id_V = mrb_intern_lit(mrb, "V");
-  id_v = mrb_intern_lit(mrb, "v");
-  id_C = mrb_intern_lit(mrb, "C");
-  id_c = mrb_intern_lit(mrb, "c");
-  id_A = mrb_intern_lit(mrb, "A");
-  id_a = mrb_intern_lit(mrb, "a");
   id_instance_eval = mrb_intern_lit(mrb, "instance_eval");
   id_normal = mrb_intern_lit(mrb, "normal");
   id_italic = mrb_intern_lit(mrb, "italic");
