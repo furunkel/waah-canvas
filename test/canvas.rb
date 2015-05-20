@@ -36,9 +36,16 @@ assert('Canvas simple test') do
   c.text 5.0, 260.0, "The sky is"
   c.fill
 
+  w, h = c.text_extends("the limit")[0..1]
+  c.rect 5.0, 300.0 - h, w, h
+  c.color 0xff, 0x00, 0xff
+  c.fill
+
+  c.image bg_png
   c.font otf_font
   c.text 5.0, 300.0, "the limit"
   c.fill
+
 
   c.snapshot.to_png "../../test/test1.png"
 end

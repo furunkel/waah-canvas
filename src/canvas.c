@@ -779,6 +779,28 @@ canvas_text(mrb_state *mrb, mrb_value self) {
 }
 
 static mrb_value
+canvas_text_extends(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  cairo_text_extents_t e;
+  char *text;
+  mrb_value vals[6];
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "z", &text);
+
+  cairo_text_extents(cr, text, &e);
+
+  vals[0] = mrb_float_value(mrb, e.width);
+  vals[1] = mrb_float_value(mrb, e.height);
+  vals[2] = mrb_float_value(mrb, e.x_bearing);
+  vals[3] = mrb_float_value(mrb, e.y_bearing);
+  vals[4] = mrb_float_value(mrb, e.x_advance);
+  vals[5] = mrb_float_value(mrb, e.y_advance);
+
+  return mrb_ary_new_from_values(mrb, 6, vals);
+}
+
+static mrb_value
 canvas_path_extends(mrb_state *mrb, mrb_value self) {
   CANVAS_DEFAULT_DECLS;
   double x1, x2, y1, y2;
@@ -1371,6 +1393,7 @@ mrb_waah_canvas_gem_init(mrb_state *mrb) {
   mrb_define_method(mrb, cCanvas, "A", canvas_A, ARGS_REQ(5) | ARGS_OPT(1));
 
   mrb_define_method(mrb, cCanvas, "text", canvas_text, ARGS_REQ(3));
+  mrb_define_method(mrb, cCanvas, "text_extends", canvas_text_extends, ARGS_REQ(1));
   mrb_define_method(mrb, cCanvas, "font_size", canvas_font_size, ARGS_REQ(1));
   mrb_define_method(mrb, cCanvas, "font", canvas_font, ARGS_REQ(1) | ARGS_OPT(2));
 
