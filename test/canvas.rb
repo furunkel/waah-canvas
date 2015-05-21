@@ -73,6 +73,26 @@ assert('Canvas#pattern') do
   c.snapshot.to_png "../../test/test_patterns.png"
 end
 
+assert('Canvas#canvas') do
+  c = Waah::Canvas.new 256, 256
+  c2 = Waah::Canvas.new 20, 20
+
+  c2.circle 10, 10, 10
+  c2.color 0xff, 0xff, 0xff
+  c2.fill
+
+  c.rect 30, 30, c2.width, c2.height
+  c.color 0xff, 0, 0
+  c.fill
+
+  c.canvas c2, 30, 30
+  c.rect 30, 30, c2.width, c2.height
+  c.fill
+
+  c.snapshot.to_png "../../test/test_canvas.png"
+end
+
+
 assert('Canvas#width') do
   c = Waah::Canvas.new 123, 456
   assert_equal 123, c.width

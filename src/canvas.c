@@ -676,6 +676,27 @@ canvas_image(mrb_state *mrb, mrb_value self) {
   return self;
 }
 
+/* Very similar to #image, merge ? */
+static mrb_value
+canvas_canvas(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_value mrb_canvas;
+  mrb_float x = 0, y = 0;
+  waah_canvas_t *_canvas;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "o|ff", &mrb_canvas, &x, &y);
+  Data_Get_Struct(mrb, mrb_canvas, &_waah_canvas_type_info, _canvas);
+
+  if(canvas == _canvas) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "cannot use self");
+  }
+
+  cairo_set_source_surface(cr, _canvas->surface, x, y);
+
+  return self;
+}
+
 static mrb_value
 canvas_pattern(mrb_state *mrb, mrb_value self) {
   CANVAS_DEFAULT_DECLS;
@@ -1370,6 +1391,7 @@ mrb_waah_canvas_gem_init(mrb_state *mrb) {
 
   mrb_define_method(mrb, cCanvas, "color", canvas_color, ARGS_REQ(3) | ARGS_OPT(1));
   mrb_define_method(mrb, cCanvas, "image", canvas_image, ARGS_REQ(1) | ARGS_OPT(2));
+  mrb_define_method(mrb, cCanvas, "canvas", canvas_canvas, ARGS_REQ(1) | ARGS_OPT(2));
   mrb_define_method(mrb, cCanvas, "pattern", canvas_pattern, ARGS_REQ(1));
   mrb_define_method(mrb, cCanvas, "ellipse", canvas_ellipse, ARGS_REQ(4));
   mrb_define_method(mrb, cCanvas, "circle", canvas_circle, ARGS_REQ(3));
@@ -1396,7 +1418,6 @@ mrb_waah_canvas_gem_init(mrb_state *mrb) {
   mrb_define_method(mrb, cCanvas, "text_extends", canvas_text_extends, ARGS_REQ(1));
   mrb_define_method(mrb, cCanvas, "font_size", canvas_font_size, ARGS_REQ(1));
   mrb_define_method(mrb, cCanvas, "font", canvas_font, ARGS_REQ(1) | ARGS_OPT(2));
-
 
   mrb_define_method(mrb, cCanvas, "fill", canvas_fill, ARGS_OPT(1));
   mrb_define_method(mrb, cCanvas, "stroke", canvas_stroke, ARGS_OPT(1));
