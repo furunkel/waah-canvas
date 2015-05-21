@@ -835,8 +835,8 @@ canvas_path_extents(mrb_state *mrb, mrb_value self) {
                      &y2);
   vals[0] = mrb_float_value(mrb, x1);
   vals[1] = mrb_float_value(mrb, y1);
-  vals[2] = mrb_float_value(mrb, x2);
-  vals[3] = mrb_float_value(mrb, y2);
+  vals[2] = mrb_float_value(mrb, x2 - x1);
+  vals[3] = mrb_float_value(mrb, y2 - y1);
   return mrb_ary_new_from_values(mrb, 4, vals);
 }
 
@@ -1385,7 +1385,6 @@ mrb_waah_canvas_gem_init(mrb_state *mrb) {
 
   cPath = mrb_define_class_under(mrb, mWaah, "Path", mrb->object_class);
   MRB_SET_INSTANCE_TT(cPath, MRB_TT_DATA);
-
 
   mrb_define_method(mrb, cCanvas, "initialize", canvas_initialize, ARGS_REQ(2));
 
