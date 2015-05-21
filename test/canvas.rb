@@ -36,7 +36,7 @@ assert('Canvas simple test') do
   c.text 5.0, 260.0, "The sky is"
   c.fill
 
-  w, h = c.text_extends("the limit")[0..1]
+  w, h = c.text_extents("the limit")[0..1]
   c.rect 5.0, 300.0 - h, w, h
   c.color 0xff, 0x00, 0xff
   c.fill

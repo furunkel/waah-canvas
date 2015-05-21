@@ -800,7 +800,7 @@ canvas_text(mrb_state *mrb, mrb_value self) {
 }
 
 static mrb_value
-canvas_text_extends(mrb_state *mrb, mrb_value self) {
+canvas_text_extents(mrb_state *mrb, mrb_value self) {
   CANVAS_DEFAULT_DECLS;
   cairo_text_extents_t e;
   char *text;
@@ -822,7 +822,7 @@ canvas_text_extends(mrb_state *mrb, mrb_value self) {
 }
 
 static mrb_value
-canvas_path_extends(mrb_state *mrb, mrb_value self) {
+canvas_path_extents(mrb_state *mrb, mrb_value self) {
   CANVAS_DEFAULT_DECLS;
   double x1, x2, y1, y2;
   mrb_value vals[4];
@@ -1399,7 +1399,7 @@ mrb_waah_canvas_gem_init(mrb_state *mrb) {
   mrb_alias_method(mrb, cCanvas, mrb_intern_cstr(mrb, "rectangle"), mrb_intern_cstr(mrb, "rect"));
   mrb_define_method(mrb, cCanvas, "rounded_rect", canvas_rounded_rect, ARGS_REQ(5));
   mrb_define_method(mrb, cCanvas, "path", canvas_path, ARGS_OPT(1));
-  mrb_define_method(mrb, cCanvas, "path_extends", canvas_path_extends, ARGS_NONE());
+  mrb_define_method(mrb, cCanvas, "path_extents", canvas_path_extents, ARGS_NONE());
   mrb_define_method(mrb, cCanvas, "z", canvas_z, ARGS_NONE());
   mrb_define_method(mrb, cCanvas, "m", canvas_m, ARGS_REQ(2));
   mrb_define_method(mrb, cCanvas, "M", canvas_M, ARGS_REQ(2));
@@ -1415,7 +1415,7 @@ mrb_waah_canvas_gem_init(mrb_state *mrb) {
   mrb_define_method(mrb, cCanvas, "A", canvas_A, ARGS_REQ(5) | ARGS_OPT(1));
 
   mrb_define_method(mrb, cCanvas, "text", canvas_text, ARGS_REQ(3));
-  mrb_define_method(mrb, cCanvas, "text_extends", canvas_text_extends, ARGS_REQ(1));
+  mrb_define_method(mrb, cCanvas, "text_extents", canvas_text_extents, ARGS_REQ(1));
   mrb_define_method(mrb, cCanvas, "font_size", canvas_font_size, ARGS_REQ(1));
   mrb_define_method(mrb, cCanvas, "font", canvas_font, ARGS_REQ(1) | ARGS_OPT(2));
 
