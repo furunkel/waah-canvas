@@ -27,6 +27,8 @@ static mrb_sym id_bold;
 static mrb_sym id_round;
 static mrb_sym id_butt;
 static mrb_sym id_square;
+static mrb_sym id_miter;
+static mrb_sym id_bevel;
 
 struct RClass *mWaah;
 struct RClass *cCanvas;
@@ -933,8 +935,28 @@ canvas_line_cap(mrb_state *mrb, mrb_value self) {
   if(c == id_round) cap = CAIRO_LINE_CAP_ROUND;
   else if(c == id_butt) cap = CAIRO_LINE_CAP_BUTT;
   else if(c == id_square) cap = CAIRO_LINE_CAP_SQUARE;
+  else mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid cap");
 
   cairo_set_line_cap(cr, cap);
+
+  return self;
+}
+
+static mrb_value
+canvas_line_join(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_sym c;
+  cairo_line_join_t join;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "n", &c);
+
+  if(c == id_round) join = CAIRO_LINE_JOIN_ROUND;
+  else if(c == id_miter) join = CAIRO_LINE_JOIN_MITER;
+  else if(c == id_bevel) join = CAIRO_LINE_JOIN_BEVEL;
+  else mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid join");
+
+  cairo_set_line_join(cr, join);
 
   return self;
 }
@@ -1444,6 +1466,7 @@ mrb_waah_canvas_gem_init(mrb_state *mrb) {
   mrb_define_method(mrb, cCanvas, "stroke", canvas_stroke, ARGS_OPT(1));
   mrb_define_method(mrb, cCanvas, "line_width", canvas_line_width, ARGS_REQ(1));
   mrb_define_method(mrb, cCanvas, "line_cap", canvas_line_cap, ARGS_REQ(1));
+  mrb_define_method(mrb, cCanvas, "line_join", canvas_line_join, ARGS_REQ(1));
   mrb_define_method(mrb, cCanvas, "clear", canvas_clear, ARGS_NONE());
   mrb_define_method(mrb, cCanvas, "push", canvas_push, ARGS_BLOCK());
   mrb_define_method(mrb, cCanvas, "pop", canvas_pop, ARGS_NONE());
@@ -1491,6 +1514,8 @@ mrb_waah_canvas_gem_init(mrb_state *mrb) {
   id_round = mrb_intern_lit(mrb, "round");
   id_square = mrb_intern_lit(mrb, "square");
   id_butt = mrb_intern_lit(mrb, "butt");
+  id_miter = mrb_intern_lit(mrb, "miter");
+  id_bevel = mrb_intern_lit(mrb, "bevel");
 }
 
 void
