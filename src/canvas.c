@@ -9,6 +9,7 @@
 #include "waah-canvas.h"
 
 #include <stdio.h>
+#include <ctype.h>
 #include <string.h>
 #include <math.h>
 #include <time.h>
@@ -23,6 +24,9 @@ static mrb_sym id_normal;
 static mrb_sym id_italic;
 static mrb_sym id_oblique;
 static mrb_sym id_bold;
+static mrb_sym id_round;
+static mrb_sym id_butt;
+static mrb_sym id_square;
 
 struct RClass *mWaah;
 struct RClass *cCanvas;
@@ -918,6 +922,24 @@ canvas_line_width(mrb_state *mrb, mrb_value self) {
 }
 
 static mrb_value
+canvas_line_cap(mrb_state *mrb, mrb_value self) {
+  CANVAS_DEFAULT_DECLS;
+  mrb_sym c;
+  cairo_line_cap_t cap;
+  CANVAS_DEFAULT_DECL_INITS;
+
+  mrb_get_args(mrb, "n", &c);
+
+  if(c == id_round) cap = CAIRO_LINE_CAP_ROUND;
+  else if(c == id_butt) cap = CAIRO_LINE_CAP_BUTT;
+  else if(c == id_square) cap = CAIRO_LINE_CAP_SQUARE;
+
+  cairo_set_line_cap(cr, cap);
+
+  return self;
+}
+
+static mrb_value
 canvas_path(mrb_state *mrb, mrb_value self) {
   CANVAS_DEFAULT_DECLS;
   mrb_value path;
@@ -1421,6 +1443,7 @@ mrb_waah_canvas_gem_init(mrb_state *mrb) {
   mrb_define_method(mrb, cCanvas, "fill", canvas_fill, ARGS_OPT(1));
   mrb_define_method(mrb, cCanvas, "stroke", canvas_stroke, ARGS_OPT(1));
   mrb_define_method(mrb, cCanvas, "line_width", canvas_line_width, ARGS_REQ(1));
+  mrb_define_method(mrb, cCanvas, "line_cap", canvas_line_cap, ARGS_REQ(1));
   mrb_define_method(mrb, cCanvas, "clear", canvas_clear, ARGS_NONE());
   mrb_define_method(mrb, cCanvas, "push", canvas_push, ARGS_BLOCK());
   mrb_define_method(mrb, cCanvas, "pop", canvas_pop, ARGS_NONE());
@@ -1464,6 +1487,10 @@ mrb_waah_canvas_gem_init(mrb_state *mrb) {
   id_italic = mrb_intern_lit(mrb, "italic");
   id_oblique = mrb_intern_lit(mrb, "oblique");
   id_bold = mrb_intern_lit(mrb, "bold");
+
+  id_round = mrb_intern_lit(mrb, "round");
+  id_square = mrb_intern_lit(mrb, "square");
+  id_butt = mrb_intern_lit(mrb, "butt");
 }
 
 void
