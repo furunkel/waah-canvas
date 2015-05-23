@@ -307,24 +307,24 @@ _waah_image_load(mrb_state *mrb, mrb_value self, int (*png)(mrb_state *, waah_im
   
   if(len > 4 &&
      filename[len - 4] == '.' &&
-     filename[len - 3] == 'p' &&
-     filename[len - 2] == 'n' &&
-     filename[len - 1] == 'g') {
+     tolower(filename[len - 3]) == 'p' &&
+     tolower(filename[len - 2]) == 'n' &&
+     tolower(filename[len - 1]) == 'g') {
 
       if(!((*png)(mrb, image, filename))) {
         goto error;
       }
   } else if( (len > 4 &&
               filename[len - 4] == '.' &&
-              filename[len - 3] == 'j' &&
-              filename[len - 2] == 'p' &&
-              filename[len - 1] == 'g') ||
+              tolower(filename[len - 3]) == 'j' &&
+              tolower(filename[len - 2]) == 'p' &&
+              tolower(filename[len - 1]) == 'g') ||
               (len > 5 &&
               filename[len - 5] == '.' &&
-              filename[len - 4] == 'j' &&
-              filename[len - 3] == 'p' &&
-              filename[len - 2] == 'e' &&
-              filename[len - 1] == 'g'
+              tolower(filename[len - 4]) == 'j' &&
+              tolower(filename[len - 3]) == 'p' &&
+              tolower(filename[len - 2]) == 'e' &&
+              tolower(filename[len - 1]) == 'g'
              )) {
     if(!((*jpeg)(mrb, image, filename))) {
       goto error;
