@@ -4,12 +4,12 @@ require 'fileutils'
 include FileUtils
 
 DEP_TARBALLS = {
-  libpng:        'ftp://ftp.simplesystems.org/pub/libpng/png/src/libpng16/libpng-1.6.16.tar.xz',
+  libpng:        'ftp://ftp.simplesystems.org/pub/libpng/png/src/libpng16/libpng-1.6.17.tar.xz',
   freetype:      'http://download.savannah.gnu.org/releases/freetype/freetype-2.5.3.tar.bz2',
   zlib:          'http://zlib.net/zlib-1.2.8.tar.xz',
   pixman:        'http://cairographics.org/releases/pixman-0.32.6.tar.gz',
   expat:         'http://downloads.sourceforge.net/project/expat/expat/2.1.0/expat-2.1.0.tar.gz',
-  cairo:         'http://cairographics.org/releases/cairo-1.12.18.tar.xz',
+  cairo:         'http://cairographics.org/releases/cairo-1.14.2.tar.xz',
   libatomic_ops: 'https://github.com/ivmai/libatomic_ops/archive/master.tar.gz',
   fontconfig:    'http://www.freedesktop.org/software/fontconfig/release/fontconfig-2.11.0.tar.bz2',
   libjpeg:       'http://www.ijg.org/files/jpegsrc.v9a.tar.gz',
@@ -122,6 +122,8 @@ end
 
 file Build.static_lib(:libpng) => [Build.static_lib(:zlib), Build.dep_dir(:libpng)] do
   Dir.chdir Build.dep_dir(:libpng) do
+    ENV['LDFLAGS'] += " -L#{File.join Build.root_dir, 'lib'}"
+    ENV['CPPFLAGS'] = "-I#{File.join Build.root_dir, 'include'}"
     sh "./configure --host=#{ENV['HOST']} --prefix=#{Build.root_dir}  --enable-static --enable-shared=no"
     sh "make"
     sh "make install"
@@ -165,6 +167,8 @@ end
 file Build.static_lib(:cairo) => [Build.static_lib(:libatomic_ops), Build.static_lib(:pixman), Build.static_lib(:freetype), Build.dep_dir(:cairo)] do
   Dir.chdir Build.dep_dir(:cairo) do
     Build.cairo_remove_localeconv
+    ENV['LDFLAGS'] += " -L#{File.join Build.root_dir, 'lib'}"
+    ENV['CPPFLAGS'] = "-I#{File.join Build.root_dir, 'include'}"
     sh "./configure --host=#{ENV['HOST']} --prefix=#{Build.root_dir} --enable-gtk=no --enable-png --enable-static --disable-shared --enable-gobject=no --enable-xml=no --enable-script=no --enable-xlib=no --enable-xcb=no --enable-xlib-xcb=no --enable-xcb-shm=no --enable-qt=no --enable-fc=no --enable-ps=no --enable-pdf=no --enable-svg=no --enable-interpreter=no --enable-trace=no"
     sh "make"
     sh "make install"

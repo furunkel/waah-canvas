@@ -58,6 +58,7 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
         linker.flags  << '-shared -fPIC'
       when :windows
         linker.libraries << 'mingw32'
+        linker.libraries << 'ws2_32'
         linker.flags << '-mwindows'
       when :linuxfb
         self.pkg_config 'fontconfig'
@@ -81,6 +82,7 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
       if build_deps
         ENV['CC'] = build_conf.cc.command
         ENV['LD'] = build_conf.linker.command
+        ENV['AR'] = build_conf.archiver.command
         ENV['PKG_CONFIG_PATH'] = "#{File.join Build.root_dir, 'lib', 'pkgconfig'}"
         ENV['CFLAGS'] = build_conf.cc.flags.flatten.join(' ').gsub(/--sysroot=[^\s]+/, '')
 
@@ -89,12 +91,13 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
           ENV['CFLAGS'] += " -I#{File.join ENV['ANDROID_NDK_HOME'], 'sources', 'android', 'cpufeatures'}"
           ENV['HOST'] = 'arm-linux-androideabi'
         elsif platform == :windows
-          ENV['HOST'] = 'mingw32'
-          ENV['RANLIB'] = "#{File.join ENV['MINGW_TOOLCHAIN'], 'bin', ENV['MINGW_TOOLCHAIN_PREFIX']}-ranlib"
+          ENV['HOST'] = 'i686-w64-mingw32'
+          ENV['AR'] = nil
+          ENV['LD'] = nil
+          #ENV['RANLIB'] = "#{File.join ENV['MINGW_TOOLCHAIN'], 'bin', ENV['MINGW_TOOLCHAIN_PREFIX']}-ranlib"
           #ENV['LDFLAGS'] += " -L#{File.join Build.root_dir, 'lib'}"
           #ENV['CFLAGS'] += " -I#{File.join Build.root_dir, 'include'}"
         end
-        ENV['AR'] = build_conf.archiver.command
 
         cc.flags.first.unshift "-I#{File.join(Build.root_dir, 'include')}"
 
