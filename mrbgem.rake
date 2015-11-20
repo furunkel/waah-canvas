@@ -21,7 +21,6 @@ load File.join __dir__, 'tasks', 'pkg_config.rake'
 MRuby::Gem::Specification.new('waah-canvas') do |spec|
   spec.license = 'MPL 2.0'
   spec.author  = 'furunkel'
-  spec.add_dependency  'mruby-string-utf8', core: 'mruby-string-utf8'
 
   class << self
     attr_reader :platform, :build_deps
@@ -78,6 +77,7 @@ MRuby::Gem::Specification.new('waah-canvas') do |spec|
       end
 
       cc.defines << "WAAH_PLATFORM_#{platform.to_s.upcase}"
+      cc.defines << "MRB_UTF8_STRING"
 
       if build_deps
         ENV['CC'] = build_conf.cc.command
